@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Simulasi Trading Presisi</title>
+    <style>
+        /* --- RESET --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: none; user-select: none; }
+        
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        /* --- WADAH UTAMA (ASPECT RATIO LOCK) --- */
+        #game-container {
+            position: relative;
+            /* Kita kunci rasionya. HP modern biasanya sekitar 9:19 atau 9:20. 
+               Kita pakai 9:19.5 sebagai jalan tengah yang aman. */
+            aspect-ratio: 9/19.5; 
+            
+            /* Logika agar pas di layar manapun tanpa distorsi posisi */
+            height: 100%; 
+            width: auto;
+            max-width: 100%;
+            
+            background: #000;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        /* Jika layarnya sangat lebar (desktop/tablet landscape), batasi tingginya */
+        @media (min-aspect-ratio: 9/19.5) {
+            #game-container {
+                height: 100%;
+                width: auto;
+            }
+        }
+        
+        /* Jika layarnya sangat panjang/sempit */
+        @media (max-aspect-ratio: 9/19.5) {
+            #game-container {
+                width: 100%;
+                height: auto;
+            }
+        }
+
+        /* --- LAYAR GAMBAR --- */
+        .screen {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: none;
+            background-size: 100% 100%; /* Memaksa gambar mengisi container rasio tetap */
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: 1;
+        }
+        .screen.active { display: block; }
+
+        /* --- SCROLL WRAPPER (STEP 8) --- */
+        .scroll-wrapper {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            overflow-y: auto; -webkit-overflow-scrolling: touch; z-index: 2;
+            scrollbar-width: none;
+        }
+        .scroll-wrapper::-webkit-scrollbar { display: none; }
+        .scroll-wrapper img { width: 100%; display: block; height: auto; }
+
+        /* --- AREA KLIK --- */
+        .click-area, .scroll-area {
+            position: absolute; z-index: 10; cursor: pointer;
+            background: transparent; border: none;
+        }
+        .click-area:active { background-color: rgba(255, 255, 255, 0.1); }
+
+        /* --- HINT MODE --- */
+        body.show-hint .click-area {
+            border: 2px solid #ff3b30; 
+            background: rgba(255, 59, 48, 0.2);
+            animation: pulse 1s infinite alternate;
+        }
+        body.show-hint .scroll-area {
+            border: 2px dashed #00BFFF;
+            background: rgba(0, 191, 255, 0.2);
+        }
+        body.show-hint .scroll-area::after {
+            content: "USAP KE ATAS";
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #00BFFF; font-size: 10px; font-weight: bold; background: rgba(0,0,0,0.5); padding: 2px;
+        }
+        @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
+
+        /* --- TOMBOL GERIGI --- */
+        #gear-btn {
+            position: absolute; top: 10px; left: 10px;
+            width: 40px; height: 40px; z-index: 5000;
+            background: rgba(255,255,255,0.15); border-radius: 50%;
+            cursor: pointer; display: flex;
+            justify-content: center; align-items: center; font-size: 20px; color: white;
+            backdrop-filter: blur(4px); opacity: 0.5;
+        }
+
+        /* --- OVERLAY START --- */
+        #start-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .btn-start {
+            padding: 15px 40px; font-size: 18px; border-radius: 30px; border: none;
+            background: linear-gradient(135deg, #28a745, #218838);
+            color: white; font-weight: bold; cursor: pointer;
+        }
+
+        /* --- FINISH SCREEN --- */
+        #finish-screen {
+            background: #000; color: white; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+            width: 100%; height: 100%; z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- CONTAINER RASIO TETAP -->
+    <div id="game-container">
+    
+        <!-- Tombol Hint -->
+        <div id="gear-btn" onclick="toggleHint()">⚙️</div>
+
+        <!-- STEP 1 -->
+        <div class="screen active" id="screen-1" style="background-image: url('1.jpg');">
+            <div id="box-1" class="click-area" style="top: 73%; left: 26%; width: 18%; height: 9%;" onclick="go(2)"></div>
+        </div>
+
+        <!-- STEP 2 -->
+        <div class="screen" id="screen-2" style="background-image: url('2.jpg');">
+            <div id="box-2" class="click-area" style="top: 17%; left: 0%; width: 100%; height: 10%;" onclick="go(3)"></div>
+        </div>
+
+        <!-- STEP 3 -->
+        <div class="screen" id="screen-3" style="background-image: url('3.jpg');">
+            <div id="box-3" class="click-area" style="top: 0%; left: 30%; width: 70%; height: 8%;" onclick="go(4)"></div>
+        </div>
+
+        <!-- STEP 4 -->
+        <div class="screen" id="screen-4" style="background-image: url('4.jpg');">
+            <div id="box-4" class="click-area" style="top: 50%; left: 5%; width: 90%; height: 25%;" onclick="go(5)"></div>
+        </div>
+
+        <!-- STEP 5 -->
+        <div class="screen" id="screen-5" style="background-image: url('5.jpg');">
+            <div id="box-5" class="click-area" style="top: 0%; left: 0%; width: 15%; height: 8%;" onclick="go(6)"></div>
+        </div>
+
+        <!-- STEP 6 -->
+        <div class="screen" id="screen-6" style="background-image: url('6.jpg');">
+            <div id="box-6" class="click-area" style="top: 60%; left: 26%; width: 18%; height: 9%;" onclick="go(7)"></div>
+        </div>
+
+        <!-- STEP 7 -->
+        <div class="screen" id="screen-7" style="background-image: url('7.jpg');">
+            <div id="box-7" class="click-area" style="bottom: 0%; left: 25%; width: 25%; height: 8%;" onclick="go(8)"></div>
+        </div>
+
+        <!-- STEP 8 (SCROLL) -->
+        <div class="screen" id="screen-8">
+            <div class="scroll-wrapper"><img src="8.jpg" alt="Scroll" ondragstart="return false;"></div>
+            <div id="box-8" class="scroll-area" style="top: 30%; left: 10%; width: 80%; height: 40%;"></div>
+        </div>
+
+        <!-- STEP 9 (3 KOTAK) -->
+        <div class="screen" id="screen-9" style="background-image: url('9.jpg');">
+            <div id="box-9a" class="click-area" style="top: 35%; right: 5%; width: 40%; height: 6%;" onclick="go(10)"></div>
+            <div id="box-9b" class="click-area" style="top: 20%; left: 5%; width: 20%; height: 6%;" onclick="go(10)"></div>
+            <div id="box-9c" class="click-area" style="bottom: 10%; right: 5%; width: 20%; height: 6%;" onclick="go(10)"></div>
+        </div>
+
+        <!-- STEP 10 (2 TAHAP) -->
+        <div class="screen" id="screen-10" style="background-image: url('10.jpg');">
+            <div id="box-10a" class="click-area" style="top: 45%; left: 5%; width: 15%; height: 5%;" onclick="step10Part2()"></div>
+            <div id="box-10b" class="click-area" style="display:none; top: 55%; left: 5%; width: 43%; height: 7%;" onclick="go(11)"></div>
+        </div>
+
+        <!-- STEP 11 -->
+        <div class="screen" id="screen-11" style="background-image: url('11.jpg');">
+            <div id="box-11" class="click-area" style="top: 55%; right: 10%; width: 35%; height: 6%;" onclick="go(12)"></div>
+        </div>
+
+        <!-- STEP 12 -->
+        <div class="screen" id="screen-12" style="background-image: url('12.jpg');">
+            <div id="box-12" class="click-area" style="bottom: 10%; left: 25%; width: 50%; height: 8%;" onclick="finish()"></div>
+        </div>
+
+        <!-- FINISH -->
+        <div id="finish-screen">
+            <h1 style="color: #28a745;">SUKSES!</h1>
+            <button class="btn-start" onclick="location.reload()" style="font-size:14px; padding:10px 30px; margin-top:20px;">ULANGI</button>
+        </div>
+
+    </div>
+
+    <!-- START OVERLAY -->
+    <div id="start-overlay">
+        <h2 style="color:white; margin-bottom:20px;">Simulasi Trading</h2>
+        <button class="btn-start" onclick="startApp()">MULAI</button>
+    </div>
+
+    <script>
+        window.onload = function() {
+            // LOAD POSISI DARI PENYIMPANAN
+            // Karena kita pakai container rasio tetap, posisi % dari langkah sebelumnya harusnya
+            // masih valid dan akurat relatif terhadap gambar (bukan layar).
+            let saved = localStorage.getItem('simulasi_pos_final_permanen');
+            if (saved) {
+                try {
+                    const pos = JSON.parse(saved);
+                    for(let id in pos) {
+                        const el = document.getElementById(id);
+                        if(el) {
+                            el.style.top = pos[id].t;
+                            el.style.left = pos[id].l;
+                            el.style.width = pos[id].w;
+                            el.style.height = pos[id].h;
+                        }
+                    }
+                } catch(e) {}
+            }
+            initScrollLogic();
+        };
+
+        function startApp() {
+            const overlay = document.getElementById('start-overlay');
+            overlay.style.opacity = '0';
+            
+            const de = document.documentElement;
+            if(de.requestFullscreen) de.requestFullscreen().catch(()=>{});
+            else if(de.webkitRequestFullscreen) de.webkitRequestFullscreen();
+            
+            setTimeout(() => overlay.style.display = 'none', 500);
+        }
+
+        function toggleHint() { document.body.classList.toggle('show-hint'); }
+
+        function go(step) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('screen-'+step).classList.add('active');
+        }
+
+        function step10Part2() {
+            document.getElementById('box-10a').style.display = 'none';
+            document.getElementById('box-10b').style.display = 'block';
+        }
+
+        function finish() {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('finish-screen').style.display = 'flex';
+        }
+
+        function initScrollLogic() {
+            const box = document.getElementById('box-8');
+            let sy = 0;
+            box.addEventListener('touchstart', e => sy = e.touches[0].clientY, {passive:true});
+            box.addEventListener('touchend', e => {
+                if(sy - e.changedTouches[0].clientY > 40) go(9);
+            }, {passive:true});
+            box.addEventListener('mousedown', e => {
+                sy = e.clientY;
+                const up = mu => { 
+                    if(sy - mu.clientY > 40) go(9); 
+                    document.removeEventListener('mouseup', up);
+                };
+                document.addEventListener('mouseup', up);
+            });
+        }
+    </script>
+</body>
+</html>
+
+
