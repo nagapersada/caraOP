@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulasi Trading Master</title>
+    <style>
+        /* --- RESET DASAR --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            background-color: #000;
+            margin: 0; padding: 0;
+            height: 100vh; width: 100vw;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            touch-action: none; 
+            user-select: none;
+        }
+
+        /* --- WADAH HP --- */
+        #phone-container {
+            position: relative;
+            width: 100%; height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        /* Bingkai Kuning HANYA saat Mode Edit */
+        body.edit-mode #phone-container {
+            border: 2px dashed #FFC107;
+        }
+
+        /* --- KONTROL EDIT (Hanya muncul di Edit Mode) --- */
+        #controls {
+            position: absolute;
+            left: 0; width: 100%;
+            padding: 10px;
+            z-index: 9999;
+            display: none; /* Default hidden */
+            justify-content: center;
+            gap: 10px;
+            background: rgba(0,0,0,0.9);
+            border-top: 1px solid #333;
+            border-bottom: 1px solid #333;
+            bottom: 0; /* Default posisi bawah */
+        }
+        
+        body.edit-mode #controls { display: flex; }
+        
+        /* Kelas untuk memindahkan kontrol ke ATAS */
+        #controls.pos-top { top: 0; bottom: auto; }
+
+        button {
+            padding: 10px 15px; font-size: 14px; border-radius: 8px; border: none;
+            font-weight: bold; cursor: pointer; color: white; white-space: nowrap;
+        }
+        .btn-move { background: #6c757d; font-size: 18px; width: 44px; }
+        .btn-lock { background: #28a745; }
+        .btn-reset { background: #dc3545; }
+        .btn-full { background: #17a2b8; }
+
+        /* --- TOMBOL PETUNJUK (HANTU) --- */
+        #ghost-gear {
+            position: absolute;
+            top: 10px; left: 10px;
+            width: 50px; height: 50px;
+            z-index: 5000;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 24px; cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            opacity: 0.3; /* Samar */
+            transition: opacity 0.3s;
+        }
+        body.edit-mode #ghost-gear { display: none; } /* Sembunyikan gear saat edit */
+        #ghost-gear:active { opacity: 1; background: rgba(255,255,255,0.3); }
+
+        /* Tombol kembali ke Edit (Tersembunyi, klik lama pojok kanan atas) */
+        #edit-trigger {
+            position: absolute; top: 0; right: 0; width: 50px; height: 50px; z-index: 5000;
+        }
+
+        /* --- LAYAR --- */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; background-size: 100% 100%; 
+            background-position: center; background-repeat: no-repeat;
+        }
+        .screen.active { display: block; }
+
+        /* --- AREA KLIK --- */
+        .click-area, .scroll-area {
+            position: absolute; z-index: 10; cursor: pointer;
+            touch-action: none;
+        }
+
+        /* TAMPILAN SAAT EDIT MODE (KUNING JELAS) */
+        body.edit-mode .click-area {
+            border: 2px dashed #FFC107; background: rgba(255, 193, 7, 0.3); cursor: move;
+        }
+        body.edit-mode .scroll-area {
+            border: 2px dashed #00BCD4; background: rgba(0, 188, 212, 0.3); cursor: move;
+        }
+        body.edit-mode .scroll-area::after {
+            content: "AREA SCROLL"; color: white; position: absolute; top:50%; left:50%; 
+            transform:translate(-50%,-50%); font-size:10px; font-weight:bold; 
+            background:rgba(0,0,0,0.5); padding:2px;
+        }
+
+        /* TAMPILAN SAAT PLAY MODE (TRANSPARAN / BERSIH) */
+        body.play-mode .click-area, body.play-mode .scroll-area {
+            border: none; background: transparent; cursor: pointer;
+        }
+        
+        /* TAMPILAN SAAT HINT AKTIF (MERAH BERKEDIP) */
+        body.show-hint .click-area {
+            border: 3px solid red; background: rgba(255,0,0,0.2);
+            animation: pulse 1s infinite alternate;
+        }
+        body.show-hint .scroll-area {
+            border: 3px dashed #00BCD4; background: rgba(0,188,212,0.2);
+        }
+
+        @keyframes pulse { from { opacity: 1; } to { opacity: 0.5; } }
+
+        /* RESIZER (Hanya di Edit Mode) */
+        .resizer {
+            width: 30px; height: 30px; background: #007bff; border: 2px solid white;
+            border-radius: 50%; position: absolute; right: -10px; bottom: -10px;
+            cursor: se-resize; display: none; z-index: 20;
+        }
+        body.edit-mode .resizer { display: block; }
+
+        /* SCROLL WRAPPER (STEP 8) */
+        .screen-scroll-wrapper {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            overflow-y: auto; z-index: 5;
+        }
+        .screen-scroll-wrapper img { width: 100%; display: block; height: auto; }
+
+        /* FINISH SCREEN */
+        #finish-screen {
+            background: #111; color: white; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+            height: 100%; width: 100%; z-index: 100;
+        }
+    </style>
+</head>
+<body class="edit-mode"> <!-- Default mulai di Edit Mode agar bisa di-pas-in dulu -->
+
+    <!-- Tombol Hantu (Petunjuk) -->
+    <div id="ghost-gear" onclick="toggleHint()">⚙️</div>
+    
+    <!-- Trigger Rahasia (Pojok Kanan Atas) untuk kembali ke Edit Mode -->
+    <div id="edit-trigger" onclick="askEditMode()"></div>
+
+    <!-- Panel Kontrol -->
+    <div id="controls">
+        <button class="btn-move" onclick="moveControls()">↕</button>
+        <button class="btn-full" onclick="toggleFullScreen()">⛶ Full</button>
+        <button class="btn-lock" onclick="lockAndPlay()">🔒 Kunci & Mainkan</button>
+        <button class="btn-reset" onclick="resetPositions()">⚠️ Reset</button>
+    </div>
+
+    <div id="phone-container">
+        
+        <!-- STEP 1 -->
+        <div class="screen active" id="screen-1" style="background-image: url('1.jpg');"><div id="box-1" class="click-area" style="top: 73%; left: 26%; width: 18%; height: 9%;" onclick="next(2)"><div class="resizer"></div></div></div>
+        
+        <!-- STEP 2 -->
+        <div class="screen" id="screen-2" style="background-image: url('2.jpg');"><div id="box-2" class="click-area" style="top: 17%; left: 0%; width: 100%; height: 10%;" onclick="next(3)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 3 -->
+        <div class="screen" id="screen-3" style="background-image: url('3.jpg');"><div id="box-3" class="click-area" style="top: 0%; left: 30%; width: 70%; height: 8%;" onclick="next(4)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 4 -->
+        <div class="screen" id="screen-4" style="background-image: url('4.jpg');"><div id="box-4" class="click-area" style="top: 50%; left: 5%; width: 90%; height: 25%;" onclick="next(5)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 5 -->
+        <div class="screen" id="screen-5" style="background-image: url('5.jpg');"><div id="box-5" class="click-area" style="top: 0%; left: 0%; width: 15%; height: 8%;" onclick="next(6)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 6 -->
+        <div class="screen" id="screen-6" style="background-image: url('6.jpg');"><div id="box-6" class="click-area" style="top: 60%; left: 26%; width: 18%; height: 9%;" onclick="next(7)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 7 -->
+        <div class="screen" id="screen-7" style="background-image: url('7.jpg');"><div id="box-7" class="click-area" style="bottom: 0%; left: 25%; width: 25%; height: 8%;" onclick="next(8)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 8 (SCROLL) -->
+        <div class="screen" id="screen-8">
+            <div class="screen-scroll-wrapper"><img src="8.jpg" alt="Scroll" ondragstart="return false;"></div>
+            <div id="box-8" class="scroll-area" style="top: 30%; left: 10%; width: 80%; height: 40%;"><div class="resizer"></div></div>
+        </div>
+
+        <!-- STEP 9 -->
+        <div class="screen" id="screen-9" style="background-image: url('9.jpg');"><div id="box-9" class="click-area" style="top: 35%; right: 5%; width: 40%; height: 6%;" onclick="next(10)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 10 -->
+        <div class="screen" id="screen-10" style="background-image: url('10.jpg');">
+            <div id="box-10a" class="click-area" style="top: 45%; left: 5%; width: 15%; height: 5%;" onclick="step10Part2()"><div class="resizer"></div></div>
+            <div id="box-10b" class="click-area" style="display:none; top: 55%; left: 5%; width: 43%; height: 7%;" onclick="next(11)"><div class="resizer"></div></div>
+        </div>
+
+        <!-- STEP 11 -->
+        <div class="screen" id="screen-11" style="background-image: url('11.jpg');"><div id="box-11" class="click-area" style="top: 55%; right: 10%; width: 35%; height: 6%;" onclick="next(12)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 12 -->
+        <div class="screen" id="screen-12" style="background-image: url('12.jpg');"><div id="box-12" class="click-area" style="bottom: 10%; left: 25%; width: 50%; height: 8%;" onclick="finish()"><div class="resizer"></div></div></div>
+
+        <!-- FINISH -->
+        <div id="finish-screen">
+            <h1 style="color: #28a745;">SUKSES!</h1>
+            <button style="padding:10px 20px; border-radius:10px; border:none; margin-top:20px; cursor:pointer;" onclick="location.reload()">Ulangi</button>
+        </div>
+
+    </div>
+
+    <script>
+        const container = document.getElementById('phone-container');
+        const controls = document.getElementById('controls');
+        let isEditMode = true;
+
+        window.onload = function() {
+            // Coba pulihkan posisi dari semua kemungkinan kunci penyimpanan sebelumnya
+            let saved = localStorage.getItem('simulasi_pos_master_lock') || 
+                        localStorage.getItem('simulasi_pos_fixed_final') ||
+                        localStorage.getItem('simulasi_pos_final_v2');
+            
+            if (saved) {
+                try {
+                    const pos = JSON.parse(saved);
+                    for(let id in pos) {
+                        const el = document.getElementById(id);
+                        if(el) {
+                            el.style.top = pos[id].t;
+                            el.style.left = pos[id].l || pos[id].left;
+                            el.style.width = pos[id].w;
+                            el.style.height = pos[id].h;
+                        }
+                    }
+                } catch(e) {}
+            }
+            initDragAndResize();
+            initScrollLogic();
+        };
+
+        // --- NAVIGASI POSISI KONTROL ---
+        function moveControls() {
+            controls.classList.toggle('pos-top');
+        }
+
+        // --- LOGIKA UTAMA ---
+        function lockAndPlay() {
+            if (confirm("Sudah pas posisinya? Aplikasi akan dikunci dan masuk mode Full Screen.")) {
+                savePositions();
+                isEditMode = false;
+                document.body.classList.remove('edit-mode');
+                document.body.classList.add('play-mode');
+                toggleFullScreen();
+                
+                // Pastikan step 10 part 2 tersembunyi saat mulai main
+                document.getElementById('box-10a').style.display = 'block';
+                document.getElementById('box-10b').style.display = 'none';
+            }
+        }
+
+        function askEditMode() {
+            if(!isEditMode && confirm("Kembali ke Mode Edit untuk mengatur posisi?")) {
+                isEditMode = true;
+                document.body.classList.add('edit-mode');
+                document.body.classList.remove('play-mode');
+                
+                // Tampilkan semua part step 10 untuk diedit
+                document.getElementById('box-10a').style.display = 'block';
+                document.getElementById('box-10b').style.display = 'block';
+            }
+        }
+
+        function toggleHint() {
+            if(!isEditMode) document.body.classList.toggle('show-hint');
+        }
+
+        // --- GAMEPLAY ---
+        function next(step) {
+            if(isEditMode) return; // Jangan pindah kalau lagi edit
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            const t = document.getElementById('screen-'+step);
+            if(t) t.classList.add('active');
+        }
+
+        function step10Part2() {
+            if(isEditMode) return;
+            document.getElementById('box-10a').style.display = 'none';
+            document.getElementById('box-10b').style.display = 'block';
+        }
+
+        function finish() {
+            if(isEditMode) return;
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('finish-screen').style.display = 'flex';
+        }
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(e=>{});
+            }
+        }
+
+        // --- SCROLL LOGIC ---
+        function initScrollLogic() {
+            const box = document.getElementById('box-8');
+            let sy = 0;
+            const handlerStart = (y) => { sy = y; };
+            const handlerEnd = (y) => { if(!isEditMode && (sy - y > 40)) next(9); };
+
+            box.addEventListener('touchstart', e => handlerStart(e.touches[0].clientY), {passive:true});
+            box.addEventListener('touchend', e => handlerEnd(e.changedTouches[0].clientY), {passive:true});
+            box.addEventListener('mousedown', e => {
+                handlerStart(e.clientY);
+                const up = mu => { handlerEnd(mu.clientY); document.removeEventListener('mouseup', up); };
+                document.addEventListener('mouseup', up);
+            });
+        }
+
+        // --- DRAG & RESIZE SYSTEM ---
+        function getCoords(e) { return (e.touches && e.touches[0]) ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : {x:e.clientX, y:e.clientY}; }
+
+        function initDragAndResize() {
+            const boxes = document.querySelectorAll('.click-area, .scroll-area');
+            boxes.forEach(box => {
+                const resizer = box.querySelector('.resizer');
+                
+                // RESIZE
+                const startResize = (e) => {
+                    if(!isEditMode) return;
+                    e.stopPropagation();
+                    const start = getCoords(e);
+                    const sw = box.offsetWidth, sh = box.offsetHeight;
+                    const cw = container.offsetWidth, ch = container.offsetHeight;
+                    
+                    const move = (ev) => {
+                        const curr = getCoords(ev);
+                        box.style.width = ((sw + (curr.x - start.x))/cw*100) + '%';
+                        box.style.height = ((sh + (curr.y - start.y))/ch*100) + '%';
+                    };
+                    const end = () => { unbind(move, end); };
+                    bind(move, end);
+                };
+
+                // DRAG
+                const startDrag = (e) => {
+                    if(!isEditMode || e.target.classList.contains('resizer')) return;
+                    if(e.type === 'touchstart') e.preventDefault();
+                    const start = getCoords(e);
+                    const rect = box.getBoundingClientRect();
+                    const crect = container.getBoundingClientRect();
+                    const sl = rect.left - crect.left, st = rect.top - crect.top;
+
+                    const move = (ev) => {
+                        if(ev.type==='touchmove') ev.preventDefault();
+                        const curr = getCoords(ev);
+                        box.style.left = ((sl + (curr.x - start.x))/container.offsetWidth*100) + '%';
+                        box.style.top = ((st + (curr.y - start.y))/container.offsetHeight*100) + '%';
+                    };
+                    const end = () => { unbind(move, end); };
+                    bind(move, end);
+                };
+
+                if(resizer) {
+                    resizer.addEventListener('mousedown', startResize);
+                    resizer.addEventListener('touchstart', startResize, {passive:false});
+                }
+                box.addEventListener('mousedown', startDrag);
+                box.addEventListener('touchstart', startDrag, {passive:false});
+            });
+        }
+
+        function bind(mv, end) {
+            document.addEventListener('mousemove', mv); document.addEventListener('mouseup', end);
+            document.addEventListener('touchmove', mv, {passive:false}); document.addEventListener('touchend', end);
+        }
+        function unbind(mv, end) {
+            document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', end);
+            document.removeEventListener('touchmove', mv); document.removeEventListener('touchend', end);
+        }
+
+        function savePositions() {
+            const pos = {};
+            document.querySelectorAll('.click-area, .scroll-area').forEach(b => {
+                if(b.id) pos[b.id] = {t:b.style.top, l:b.style.left, w:b.style.width, h:b.style.height};
+            });
+            localStorage.setItem('simulasi_pos_master_lock', JSON.stringify(pos));
+        }
+
+        function resetPositions() {
+            if(confirm("Reset posisi ke awal?")) {
+                localStorage.removeItem('simulasi_pos_master_lock');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
+
+
