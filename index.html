@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulasi Trading DV Team</title>
+    <style>
+        /* --- RESET & OPTIMASI --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            background-color: #000;
+            margin: 0; padding: 0;
+            height: 100vh; width: 100vw;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            touch-action: none; /* Mencegah zoom/scroll default browser */
+            user-select: none;
+        }
+
+        /* --- WADAH UTAMA --- */
+        #phone-container {
+            position: relative;
+            width: 100%; height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        /* --- LAYAR GAMBAR --- */
+        .screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: none;
+            background-size: 100% 100%;
+            background-position: center;
+            background-repeat: no-repeat;
+            will-change: opacity; /* Optimasi render */
+        }
+        .screen.active { display: block; }
+        
+        /* Wrapper khusus untuk Step 8 (Scroll) */
+        .screen-scroll-wrapper {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch; /* Smooth scroll di iOS */
+            z-index: 5;
+            background-color: #000;
+        }
+        .screen-scroll-wrapper img {
+            width: 100%; display: block; height: auto;
+        }
+
+        /* --- TOMBOL GERIGI (TOGGLE HINT) --- */
+        #hint-toggle {
+            position: absolute;
+            top: 20px; left: 20px;
+            z-index: 9999;
+            font-size: 24px;
+            opacity: 0.2; /* Transparan / Samar */
+            cursor: pointer;
+            transition: opacity 0.3s;
+            filter: drop-shadow(0 0 2px rgba(0,0,0,0.8));
+        }
+        #hint-toggle:active, #hint-toggle:hover { opacity: 1; }
+
+        /* --- AREA KLIK (INVISIBLE DEFAULT) --- */
+        .click-area, .scroll-area {
+            position: absolute;
+            z-index: 10;
+            cursor: pointer;
+            /* Default: Tidak terlihat sama sekali */
+            background: transparent;
+            border: none;
+            transition: background 0.2s, border 0.2s;
+        }
+
+        /* Efek saat diklik (Feedback halus) */
+        .click-area:active {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* --- MODE PETUNJUK (AKTIF SAAT GERIGI DIKLIK) --- */
+        body.show-hints .click-area {
+            border: 3px solid red;
+            background-color: rgba(255, 0, 0, 0.2);
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+            animation: pulse 1s infinite alternate;
+        }
+
+        body.show-hints .scroll-area {
+            border: 3px dashed #00BCD4;
+            background-color: rgba(0, 188, 212, 0.2);
+        }
+        
+        /* Label khusus untuk area scroll saat mode hint */
+        body.show-hints .scroll-area::after {
+            content: "USAP KE ATAS";
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00BCD4; font-weight: bold; font-size: 12px;
+            text-shadow: 1px 1px 2px black;
+            pointer-events: none;
+        }
+
+        @keyframes pulse {
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0.7; transform: scale(1.02); }
+        }
+
+        /* --- LAYAR MULAI & SELESAI --- */
+        #start-overlay, #finish-screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+        }
+        
+        #finish-screen { display: none; }
+
+        .btn-action {
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 30px;
+            border: none;
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        .btn-action:active { transform: scale(0.95); }
+
+    </style>
+</head>
+<body>
+
+    <!-- TOMBOL TOGGLE HINT (GERIGI) -->
+    <div id="hint-toggle" onclick="toggleHints()">⚙️</div>
+
+    <!-- OVERLAY MULAI (Pemicu Full Screen) -->
+    <div id="start-overlay">
+        <h2 style="margin-bottom: 10px;">Simulasi Trading</h2>
+        <p style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Pastikan volume menyala & rotasi dikunci.</p>
+        <button class="btn-action" onclick="startApp()">MULAI</button>
+    </div>
+
+    <!-- WADAH APLIKASI -->
+    <div id="phone-container">
+        
+        <!-- 1. Telegram -->
+        <div class="screen active" id="screen-1" style="background-image: url('1.jpg');">
+            <div id="box-1" class="click-area" style="top: 73%; left: 26%; width: 18%; height: 9%;" onclick="next(2)"></div>
+        </div>
+
+        <!-- 2. Group -->
+        <div class="screen" id="screen-2" style="background-image: url('2.jpg');">
+            <div id="box-2" class="click-area" style="top: 17%; left: 0%; width: 100%; height: 10%;" onclick="next(3)"></div>
+        </div>
+
+        <!-- 3. Pin -->
+        <div class="screen" id="screen-3" style="background-image: url('3.jpg');">
+            <div id="box-3" class="click-area" style="top: 0%; left: 30%; width: 70%; height: 8%;" onclick="next(4)"></div>
+        </div>
+
+        <!-- 4. Kartu Sinyal -->
+        <div class="screen" id="screen-4" style="background-image: url('4.jpg');">
+            <div id="box-4" class="click-area" style="top: 50%; left: 5%; width: 90%; height: 25%;" onclick="next(5)"></div>
+        </div>
+
+        <!-- 5. Home -->
+        <div class="screen" id="screen-5" style="background-image: url('5.jpg');">
+            <div id="box-5" class="click-area" style="top: 0%; left: 0%; width: 15%; height: 8%;" onclick="next(6)"></div>
+        </div>
+
+        <!-- 6. App Opalp -->
+        <div class="screen" id="screen-6" style="background-image: url('6.jpg');">
+            <div id="box-6" class="click-area" style="top: 60%; left: 26%; width: 18%; height: 9%;" onclick="next(7)"></div>
+        </div>
+
+        <!-- 7. Kontrak -->
+        <div class="screen" id="screen-7" style="background-image: url('7.jpg');">
+            <div id="box-7" class="click-area" style="bottom: 0%; left: 25%; width: 25%; height: 8%;" onclick="next(8)"></div>
+        </div>
+
+        <!-- 8. SCROLL AREA -->
+        <div class="screen" id="screen-8">
+            <div class="screen-scroll-wrapper">
+                <img src="8.jpg" alt="Scroll" ondragstart="return false;">
+            </div>
+            <!-- Area Trigger Scroll -->
+            <div id="box-8" class="scroll-area" style="top: 30%; left: 10%; width: 80%; height: 40%;"></div>
+        </div>
+
+        <!-- 9. Periode -->
+        <div class="screen" id="screen-9" style="background-image: url('9.jpg');">
+            <div id="box-9" class="click-area" style="top: 35%; right: 5%; width: 40%; height: 6%;" onclick="next(10)"></div>
+        </div>
+
+        <!-- 10. 1% & Beli/Jual -->
+        <div class="screen" id="screen-10" style="background-image: url('10.jpg');">
+            <div id="box-10a" class="click-area" style="top: 45%; left: 5%; width: 15%; height: 5%;" onclick="step10Part2()"></div>
+            <div id="box-10b" class="click-area" style="display:none; top: 55%; left: 5%; width: 43%; height: 7%;" onclick="next(11)"></div>
+        </div>
+
+        <!-- 11. Konfirmasi -->
+        <div class="screen" id="screen-11" style="background-image: url('11.jpg');">
+            <div id="box-11" class="click-area" style="top: 55%; right: 10%; width: 35%; height: 6%;" onclick="next(12)"></div>
+        </div>
+
+        <!-- 12. Pesanan Terbuka -->
+        <div class="screen" id="screen-12" style="background-image: url('12.jpg');">
+            <div id="box-12-finish" class="click-area" style="bottom: 10%; left: 25%; width: 50%; height: 8%;" onclick="finish()"></div>
+        </div>
+
+        <!-- Finish -->
+        <div id="finish-screen">
+            <h1 style="color: #28a745; font-size: 24px;">TRANSAKSI BERHASIL!</h1>
+            <p>Simulasi Selesai.</p>
+            <button class="btn-action" onclick="location.reload()" style="background: #333;">ULANGI</button>
+        </div>
+        
+    </div>
+
+    <script>
+        // --- LOAD POSISI DARI STEP SEBELUMNYA ---
+        // Kode ini sangat penting: Mengambil data presisi yang sudah Abang atur sebelumnya.
+        window.onload = function() {
+            // Coba load dari versi final v2 (yang paling update)
+            let saved = localStorage.getItem('simulasi_pos_final_v2');
+            
+            // Backup: Coba load dari versi ultimate jika v2 kosong
+            if (!saved) saved = localStorage.getItem('simulasi_pos_ultimate');
+
+            if (saved) {
+                try {
+                    const positions = JSON.parse(saved);
+                    for (let id in positions) {
+                        const box = document.getElementById(id);
+                        if (box) {
+                            box.style.top = positions[id].t;
+                            box.style.left = positions[id].left; // Perbaikan nama key dari versi sebelumnya
+                            if(!box.style.left) box.style.left = positions[id].l; // Handle format lama 'l' vs 'left'
+                            box.style.width = positions[id].w;
+                            box.style.height = positions[id].h;
+                        }
+                    }
+                    console.log("Posisi presisi dimuat.");
+                } catch (e) {
+                    console.error("Gagal memuat posisi:", e);
+                }
+            }
+            
+            initScrollLogic();
+        };
+
+        // --- FUNGSI UTAMA ---
+
+        function startApp() {
+            // Masuk Full Screen
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) { 
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) { 
+                elem.msRequestFullscreen();
+            }
+            // Hapus overlay
+            document.getElementById('start-overlay').style.display = 'none';
+        }
+
+        function toggleHints() {
+            document.body.classList.toggle('show-hints');
+        }
+
+        function next(step) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            const target = document.getElementById('screen-' + step);
+            if(target) target.classList.add('active');
+        }
+
+        function step10Part2() {
+            document.getElementById('box-10a').style.display = 'none';
+            document.getElementById('box-10b').style.display = 'block';
+        }
+
+        function finish() {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('finish-screen').style.display = 'flex';
+        }
+
+        // --- LOGIKA SCROLL (STEP 8) ---
+        function initScrollLogic() {
+            const scrollBox = document.getElementById('box-8');
+            let startY = 0;
+
+            scrollBox.addEventListener('touchstart', (e) => {
+                startY = e.touches[0].clientY;
+            }, {passive: true});
+
+            scrollBox.addEventListener('touchend', (e) => {
+                const endY = e.changedTouches[0].clientY;
+                if (startY - endY > 40) next(9); // Swipe Up > 40px
+            }, {passive: true});
+            
+            // Mouse Support
+            scrollBox.addEventListener('mousedown', (e) => {
+                startY = e.clientY;
+                const onUp = (mu) => {
+                    if (startY - mu.clientY > 40) next(9);
+                    document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mouseup', onUp);
+            });
+        }
+    </script>
+</body>
+</html>
+
+
