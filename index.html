@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#000000">
+    <title>Simulasi Trading Profesional</title>
+    <style>
+        /* --- RESET DASAR --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        
+        html, body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background-color: #121212; /* Warna latar belakang gelap elegan */
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            
+            /* Kunci layout agar selalu di tengah */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* --- WADAH HP (CONTAINER UTAMA) --- */
+        #phone-container {
+            position: relative;
+            background-color: #000;
+            overflow: hidden;
+            
+            /* --- RAHASIA AGAR TIDAK BERANTAKAN --- */
+            width: 100%; 
+            height: 100%;
+            
+            /* Batasi ukuran maksimal agar tetap proporsional seperti HP */
+            /* Jika di layar lebar (tablet/desktop), dia akan berbentuk HP di tengah */
+            max-width: 450px; 
+            max-height: 900px; 
+            
+            /* Agar rasio layar HP modern terjaga (opsional, jika ingin full screen HP hapus baris ini) */
+            /* aspect-ratio: 9/19.5; */ 
+            
+            box-shadow: 0 0 50px rgba(0,0,0,0.5); /* Efek bayangan mewah */
+        }
+
+        /* --- LAYAR (SCREENS) --- */
+        .screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            opacity: 0; 
+            visibility: hidden;
+            z-index: 1;
+            
+            /* Gambar background mengisi penuh container */
+            background-size: 100% 100%; 
+            background-position: center;
+            background-repeat: no-repeat;
+            
+            transition: opacity 0.3s ease; /* Transisi halus */
+        }
+        
+        .screen.active { 
+            opacity: 1; 
+            visibility: visible;
+            z-index: 2;
+        }
+
+        /* --- KHUSUS SCROLL IMAGE (STEP 8) --- */
+        .screen-scroll-wrapper {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch; /* Smooth scroll iOS */
+            z-index: 5;
+            background-color: #000;
+            scrollbar-width: none; /* Hide scrollbar Firefox */
+        }
+        .screen-scroll-wrapper::-webkit-scrollbar { display: none; /* Hide scrollbar Chrome */ }
+        .screen-scroll-wrapper img { width: 100%; display: block; height: auto; }
+
+        /* --- TOMBOL PETUNJUK (HANTU) --- */
+        #ghost-gear {
+            position: absolute;
+            top: 20px; left: 20px;
+            width: 44px; height: 44px;
+            z-index: 9999;
+            cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 24px; color: rgba(255,255,255,0.2); 
+            border-radius: 50%;
+            transition: all 0.3s;
+            /* Filter blur agar menyatu dengan background */
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+        }
+        #ghost-gear:active { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.1); }
+
+        /* --- AREA KLIK (INVISIBLE) --- */
+        .click-area, .scroll-area {
+            position: absolute; z-index: 10; cursor: pointer;
+            background: transparent; border: none;
+        }
+        /* Efek Feedback Klik Halus */
+        .click-area:active { background-color: rgba(255, 255, 255, 0.08); }
+
+        /* --- MODE PETUNJUK (ACTIVE) --- */
+        body.show-hint .click-area {
+            border: 2px solid #FF3B30; /* Merah menyala */
+            background-color: rgba(255, 59, 48, 0.1);
+            box-shadow: 0 0 15px rgba(255, 59, 48, 0.3);
+            animation: pulse 1.5s infinite;
+        }
+        body.show-hint .scroll-area {
+            border: 2px dashed #00BCD4;
+            background-color: rgba(0, 188, 212, 0.1);
+        }
+        body.show-hint .scroll-area::after {
+            content: "USAP KE ATAS";
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #00BCD4; font-size: 10px; font-weight: 800; letter-spacing: 1px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8); pointer-events: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.01); }
+            100% { opacity: 0.6; transform: scale(1); }
+        }
+
+        /* --- OVERLAY MULAI --- */
+        #start-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 10000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: opacity 0.5s;
+        }
+        .btn-start {
+            margin-top: 20px;
+            padding: 14px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #00C853, #009624); /* Hijau profesional */
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 200, 83, 0.4);
+            letter-spacing: 1px;
+            transition: transform 0.1s;
+        }
+        .btn-start:active { transform: scale(0.95); }
+
+        /* --- LAYAR FINISH --- */
+        #finish-screen {
+            background: #121212; color: white; display: none; opacity: 0;
+            flex-direction: column; justify-content: center; align-items: center;
+            height: 100%; width: 100%; z-index: 100;
+            transition: opacity 0.5s;
+        }
+        #finish-screen.visible { display: flex; opacity: 1; }
+        
+        h1 { font-weight: 300; letter-spacing: 2px; margin-bottom: 5px; color: #fff; }
+        p { color: #888; font-size: 14px; margin-bottom: 30px; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Wadah Utama Aplikasi -->
+    <div id="phone-container">
+        
+        <!-- Tombol Gerigi Hantu -->
+        <div id="ghost-gear" onclick="toggleHint()">⚙️</div>
+
+        <!-- Overlay Mulai -->
+        <div id="start-overlay">
+            <h1 style="font-size: 20px; opacity: 0.9;">SIMULASI TRADING</h1>
+            <p style="font-size: 12px;">Mode Layar Penuh</p>
+            <button class="btn-start" onclick="startApp()">MULAI</button>
+        </div>
+
+        <!-- LAYAR 1 -->
+        <div class="screen active" id="screen-1" style="background-image: url('1.jpg');"><div id="box-1" class="click-area" style="top: 73%; left: 26%; width: 18%; height: 9%;" onclick="next(2)"></div></div>
+        
+        <!-- LAYAR 2 -->
+        <div class="screen" id="screen-2" style="background-image: url('2.jpg');"><div id="box-2" class="click-area" style="top: 17%; left: 0%; width: 100%; height: 10%;" onclick="next(3)"></div></div>
+
+        <!-- LAYAR 3 -->
+        <div class="screen" id="screen-3" style="background-image: url('3.jpg');"><div id="box-3" class="click-area" style="top: 0%; left: 30%; width: 70%; height: 8%;" onclick="next(4)"></div></div>
+
+        <!-- LAYAR 4 -->
+        <div class="screen" id="screen-4" style="background-image: url('4.jpg');"><div id="box-4" class="click-area" style="top: 50%; left: 5%; width: 90%; height: 25%;" onclick="next(5)"></div></div>
+
+        <!-- LAYAR 5 -->
+        <div class="screen" id="screen-5" style="background-image: url('5.jpg');"><div id="box-5" class="click-area" style="top: 0%; left: 0%; width: 15%; height: 8%;" onclick="next(6)"></div></div>
+
+        <!-- LAYAR 6 -->
+        <div class="screen" id="screen-6" style="background-image: url('6.jpg');"><div id="box-6" class="click-area" style="top: 60%; left: 26%; width: 18%; height: 9%;" onclick="next(7)"></div></div>
+
+        <!-- LAYAR 7 -->
+        <div class="screen" id="screen-7" style="background-image: url('7.jpg');"><div id="box-7" class="click-area" style="bottom: 0%; left: 25%; width: 25%; height: 8%;" onclick="next(8)"></div></div>
+
+        <!-- LAYAR 8 (SCROLL) -->
+        <div class="screen" id="screen-8">
+            <div class="screen-scroll-wrapper"><img src="8.jpg" alt="Scroll" ondragstart="return false;"></div>
+            <div id="box-8" class="scroll-area" style="top: 30%; left: 10%; width: 80%; height: 40%;"></div>
+        </div>
+
+        <!-- LAYAR 9 -->
+        <div class="screen" id="screen-9" style="background-image: url('9.jpg');"><div id="box-9" class="click-area" style="top: 35%; right: 5%; width: 40%; height: 6%;" onclick="next(10)"></div></div>
+
+        <!-- LAYAR 10 (2 TAHAP) -->
+        <div class="screen" id="screen-10" style="background-image: url('10.jpg');">
+            <div id="box-10a" class="click-area" style="top: 45%; left: 5%; width: 15%; height: 5%;" onclick="step10Part2()"></div>
+            <div id="box-10b" class="click-area" style="display:none; top: 55%; left: 5%; width: 43%; height: 7%;" onclick="next(11)"></div>
+        </div>
+
+        <!-- LAYAR 11 -->
+        <div class="screen" id="screen-11" style="background-image: url('11.jpg');"><div id="box-11" class="click-area" style="top: 55%; right: 10%; width: 35%; height: 6%;" onclick="next(12)"></div></div>
+
+        <!-- LAYAR 12 -->
+        <div class="screen" id="screen-12" style="background-image: url('12.jpg');"><div id="box-12" class="click-area" style="bottom: 10%; left: 25%; width: 50%; height: 8%;" onclick="finish()"></div></div>
+
+        <!-- FINISH -->
+        <div id="finish-screen">
+            <h1>BERHASIL</h1>
+            <p>Transaksi Selesai.</p>
+            <button class="btn-start" style="background: #333; margin-top:0;" onclick="location.reload()">ULANGI</button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- AUTO LOAD POSISI ---
+        window.onload = function() {
+            // Mengambil data posisi dari penyimpanan lokal
+            let saved = localStorage.getItem('simulasi_pos_master_v3') || 
+                        localStorage.getItem('simulasi_pos_master_lock') ||
+                        localStorage.getItem('simulasi_pos_fixed_final');
+            
+            if (saved) {
+                try {
+                    const pos = JSON.parse(saved);
+                    for(let id in pos) {
+                        const el = document.getElementById(id);
+                        if(el) {
+                            el.style.top = pos[id].t;
+                            el.style.left = pos[id].l || pos[id].left; 
+                            el.style.width = pos[id].w;
+                            el.style.height = pos[id].h;
+                        }
+                    }
+                } catch(e) {}
+            }
+            initScrollLogic();
+        };
+
+        // --- START APP (FULLSCREEN) ---
+        function startApp() {
+            const overlay = document.getElementById('start-overlay');
+            overlay.style.opacity = '0';
+            
+            // Fullscreen API (Universal)
+            const el = document.documentElement;
+            if(el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+            else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            
+            setTimeout(() => { overlay.style.display = 'none'; }, 500);
+        }
+
+        // --- TOGGLE PETUNJUK ---
+        function toggleHint() {
+            document.body.classList.toggle('show-hint');
+        }
+
+        // --- NAVIGASI ---
+        function next(step) {
+            const active = document.querySelector('.screen.active');
+            if(active) active.classList.remove('active');
+
+            const target = document.getElementById('screen-' + step);
+            if(target) {
+                // Force Repaint untuk iOS agar transisi mulus
+                void target.offsetWidth; 
+                target.classList.add('active');
+            }
+        }
+
+        function step10Part2() {
+            document.getElementById('box-10a').style.display = 'none';
+            document.getElementById('box-10b').style.display = 'block';
+        }
+
+        function finish() {
+            document.querySelector('.screen.active').classList.remove('active');
+            const fs = document.getElementById('finish-screen');
+            fs.style.display = 'flex';
+            setTimeout(() => fs.classList.add('visible'), 50);
+        }
+
+        // --- SCROLL LOGIC ---
+        function initScrollLogic() {
+            const box = document.getElementById('box-8');
+            let startY = 0;
+
+            // Touch
+            box.addEventListener('touchstart', e => startY = e.touches[0].clientY, {passive:true});
+            box.addEventListener('touchend', e => {
+                if(startY - e.changedTouches[0].clientY > 40) next(9);
+            }, {passive:true});
+            
+            // Mouse
+            box.addEventListener('mousedown', e => {
+                startY = e.clientY;
+                const up = mu => { 
+                    if(startY - mu.clientY > 40) next(9); 
+                    document.removeEventListener('mouseup', up);
+                };
+                document.addEventListener('mouseup', up);
+            });
+        }
+    </script>
+</body>
+</html>
+
+
