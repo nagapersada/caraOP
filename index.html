@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulasi Trading Fix</title>
+    <style>
+        /* --- RESET & LAYOUT ANTI-POTONG --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            background-color: #000;
+            margin: 0; padding: 0;
+            /* Gunakan dvh (Dynamic Viewport Height) untuk menghindari address bar browser */
+            height: 100vh; 
+            height: 100dvh; 
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            touch-action: none; 
+            user-select: none;
+        }
+
+        /* --- WADAH HP (RESPONSIF PENUH) --- */
+        #phone-container {
+            position: relative;
+            /* Trik agar rasio tetap terjaga dan tidak gepeng/kepotong */
+            width: 100%;
+            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
+            aspect-ratio: 9/19; /* Rasio umum HP modern */
+            
+            background-color: #000;
+            overflow: hidden;
+            z-index: 1;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* Mode Edit: Bingkai Kuning */
+        body.edit-mode #phone-container {
+            border: 2px dashed #FFC107;
+            /* Sedikit dikecilkan di mode edit biar border kelihatan jelas */
+            transform: scale(0.95);
+            transition: transform 0.3s;
+        }
+
+        /* --- PANEL KONTROL (EDIT MODE) --- */
+        #controls {
+            position: absolute;
+            left: 0; width: 100%;
+            padding: 10px;
+            z-index: 9999;
+            display: none; /* Hidden by default (Play Mode) */
+            justify-content: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.9);
+            border-top: 1px solid #333;
+            bottom: 0;
+        }
+        
+        body.edit-mode #controls { display: flex; }
+        #controls.pos-top { top: 0; bottom: auto; border-bottom: 1px solid #333; border-top: none; }
+
+        button {
+            padding: 12px 14px; font-size: 13px; border-radius: 8px; border: none;
+            font-weight: bold; cursor: pointer; color: white; white-space: nowrap;
+        }
+        .btn-move { background: #6c757d; font-size: 18px; width: 40px; }
+        .btn-lock { background: #28a745; box-shadow: 0 0 10px #28a745; }
+        .btn-reset { background: #dc3545; }
+        .btn-full { background: #17a2b8; }
+
+        /* --- TOMBOL PETUNJUK (GEAR) --- */
+        #ghost-gear {
+            position: absolute; top: 15px; left: 15px; width: 40px; height: 40px;
+            z-index: 5000; display: flex; justify-content: center; align-items: center;
+            font-size: 20px; cursor: pointer; background: rgba(255,255,255,0.15);
+            border-radius: 50%; opacity: 0.3; transition: opacity 0.3s;
+        }
+        body.edit-mode #ghost-gear { display: none; }
+        #ghost-gear:active { opacity: 1; background: rgba(255,255,255,0.4); }
+
+        /* Trigger Rahasia (Pojok Kanan Atas - Tahan lama untuk Edit) */
+        #edit-trigger { position: absolute; top: 0; right: 0; width: 60px; height: 60px; z-index: 5000; }
+
+        /* --- LAYAR --- */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; background-size: 100% 100%; 
+            background-position: center; background-repeat: no-repeat;
+        }
+        .screen.active { display: block; }
+
+        /* --- AREA KLIK --- */
+        .click-area, .scroll-area {
+            position: absolute; z-index: 10; cursor: pointer; touch-action: none;
+        }
+
+        /* EDIT MODE (Visual Jelas) */
+        body.edit-mode .click-area { border: 2px dashed #FFC107; background: rgba(255, 193, 7, 0.2); cursor: move; }
+        body.edit-mode .scroll-area { border: 2px dashed #00BCD4; background: rgba(0, 188, 212, 0.2); cursor: move; }
+        body.edit-mode .scroll-area::after {
+            content: "SWIPE UP"; color: #00BCD4; position: absolute; top:50%; left:50%; 
+            transform:translate(-50%,-50%); font-size:10px; font-weight:bold; background:black; padding:2px;
+        }
+
+        /* PLAY MODE (Transparan) */
+        body.play-mode .click-area, body.play-mode .scroll-area { border: none; background: transparent; }
+        body.play-mode .click-area:active { background: rgba(255,255,255,0.1); }
+
+        /* HINT MODE (Merah) */
+        body.show-hint .click-area { border: 3px solid red; background: rgba(255,0,0,0.15); animation: blink 1s infinite; }
+        body.show-hint .scroll-area { border: 3px dashed #00BCD4; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        /* RESIZER */
+        .resizer {
+            width: 30px; height: 30px; background: #007bff; border: 2px solid white;
+            border-radius: 50%; position: absolute; right: -10px; bottom: -10px;
+            cursor: se-resize; display: none; z-index: 20;
+        }
+        body.edit-mode .resizer { display: block; }
+
+        /* SCROLL IMAGE */
+        .screen-scroll-wrapper {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            overflow-y: auto; z-index: 5;
+        }
+        .screen-scroll-wrapper img { width: 100%; display: block; height: auto; }
+
+        #finish-screen {
+            background: #111; color: white; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+            height: 100%; width: 100%; z-index: 100;
+        }
+    </style>
+</head>
+<body class="edit-mode">
+
+    <!-- Tombol Hint -->
+    <div id="ghost-gear" onclick="toggleHint()">⚙️</div>
+    
+    <!-- Trigger Balik ke Edit -->
+    <div id="edit-trigger" onclick="askEditMode()"></div>
+
+    <!-- Controls -->
+    <div id="controls">
+        <button class="btn-move" onclick="moveControls()">↕</button>
+        <button class="btn-full" onclick="forceFullScreen()">⛶ Layar</button>
+        <button class="btn-lock" onclick="lockAndPlay()">🔒 Kunci & Mainkan</button>
+        <button class="btn-reset" onclick="resetPositions()">⚠️ Reset</button>
+    </div>
+
+    <div id="phone-container">
+        
+        <!-- STEP 1 -->
+        <div class="screen active" id="screen-1" style="background-image: url('1.jpg');"><div id="box-1" class="click-area" style="top: 73%; left: 26%; width: 18%; height: 9%;" onclick="next(2)"><div class="resizer"></div></div></div>
+        
+        <!-- STEP 2 -->
+        <div class="screen" id="screen-2" style="background-image: url('2.jpg');"><div id="box-2" class="click-area" style="top: 17%; left: 0%; width: 100%; height: 10%;" onclick="next(3)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 3 -->
+        <div class="screen" id="screen-3" style="background-image: url('3.jpg');"><div id="box-3" class="click-area" style="top: 0%; left: 30%; width: 70%; height: 8%;" onclick="next(4)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 4 -->
+        <div class="screen" id="screen-4" style="background-image: url('4.jpg');"><div id="box-4" class="click-area" style="top: 50%; left: 5%; width: 90%; height: 25%;" onclick="next(5)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 5 -->
+        <div class="screen" id="screen-5" style="background-image: url('5.jpg');"><div id="box-5" class="click-area" style="top: 0%; left: 0%; width: 15%; height: 8%;" onclick="next(6)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 6 -->
+        <div class="screen" id="screen-6" style="background-image: url('6.jpg');"><div id="box-6" class="click-area" style="top: 60%; left: 26%; width: 18%; height: 9%;" onclick="next(7)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 7 -->
+        <div class="screen" id="screen-7" style="background-image: url('7.jpg');"><div id="box-7" class="click-area" style="bottom: 0%; left: 25%; width: 25%; height: 8%;" onclick="next(8)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 8 (SCROLL) -->
+        <div class="screen" id="screen-8">
+            <div class="screen-scroll-wrapper"><img src="8.jpg" alt="Scroll" ondragstart="return false;"></div>
+            <div id="box-8" class="scroll-area" style="top: 30%; left: 10%; width: 80%; height: 40%;"><div class="resizer"></div></div>
+        </div>
+
+        <!-- STEP 9 -->
+        <div class="screen" id="screen-9" style="background-image: url('9.jpg');"><div id="box-9" class="click-area" style="top: 35%; right: 5%; width: 40%; height: 6%;" onclick="next(10)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 10 -->
+        <div class="screen" id="screen-10" style="background-image: url('10.jpg');">
+            <div id="box-10a" class="click-area" style="top: 45%; left: 5%; width: 15%; height: 5%;" onclick="step10Part2()"><div class="resizer"></div></div>
+            <div id="box-10b" class="click-area" style="display:none; top: 55%; left: 5%; width: 43%; height: 7%;" onclick="next(11)"><div class="resizer"></div></div>
+        </div>
+
+        <!-- STEP 11 -->
+        <div class="screen" id="screen-11" style="background-image: url('11.jpg');"><div id="box-11" class="click-area" style="top: 55%; right: 10%; width: 35%; height: 6%;" onclick="next(12)"><div class="resizer"></div></div></div>
+
+        <!-- STEP 12 -->
+        <div class="screen" id="screen-12" style="background-image: url('12.jpg');"><div id="box-12" class="click-area" style="bottom: 10%; left: 25%; width: 50%; height: 8%;" onclick="finish()"><div class="resizer"></div></div></div>
+
+        <!-- FINISH -->
+        <div id="finish-screen">
+            <h1 style="color: #28a745;">SUKSES!</h1>
+            <button style="padding:10px 20px; margin-top:20px;" onclick="location.reload()">Ulangi</button>
+        </div>
+
+    </div>
+
+    <script>
+        const container = document.getElementById('phone-container');
+        const controls = document.getElementById('controls');
+        let isEditMode = true;
+
+        window.onload = function() {
+            // Load posisi dari semua kemungkinan versi sebelumnya
+            let saved = localStorage.getItem('simulasi_pos_master_v3') || 
+                        localStorage.getItem('simulasi_pos_master_lock') ||
+                        localStorage.getItem('simulasi_pos_fixed_final');
+            
+            if (saved) {
+                try {
+                    const pos = JSON.parse(saved);
+                    for(let id in pos) {
+                        const el = document.getElementById(id);
+                        if(el) {
+                            el.style.top = pos[id].t;
+                            el.style.left = pos[id].l || pos[id].left;
+                            el.style.width = pos[id].w;
+                            el.style.height = pos[id].h;
+                        }
+                    }
+                } catch(e) {}
+            }
+            initDragAndResize();
+            initScrollLogic();
+        };
+
+        function moveControls() { controls.classList.toggle('pos-top'); }
+
+        function forceFullScreen() {
+            const el = document.documentElement;
+            if(el.requestFullscreen) el.requestFullscreen();
+            else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        }
+
+        // --- KUNCI & MAINKAN (AUTO FULL SCREEN) ---
+        function lockAndPlay() {
+            if (confirm("Kunci posisi dan mulai Full Screen?")) {
+                savePositions();
+                isEditMode = false;
+                document.body.classList.remove('edit-mode');
+                document.body.classList.add('play-mode');
+                
+                // FORCE FULL SCREEN LANGSUNG SAAT KLIK
+                forceFullScreen();
+                
+                document.getElementById('box-10a').style.display = 'block';
+                document.getElementById('box-10b').style.display = 'none';
+            }
+        }
+
+        function askEditMode() {
+            if(!isEditMode && confirm("Kembali ke Mode Edit?")) {
+                isEditMode = true;
+                document.body.classList.add('edit-mode');
+                document.body.classList.remove('play-mode');
+                document.getElementById('box-10a').style.display = 'block';
+                document.getElementById('box-10b').style.display = 'block';
+            }
+        }
+
+        function toggleHint() { if(!isEditMode) document.body.classList.toggle('show-hint'); }
+
+        function next(step) {
+            if(isEditMode) return;
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            const t = document.getElementById('screen-'+step);
+            if(t) t.classList.add('active');
+        }
+
+        function step10Part2() {
+            if(isEditMode) return;
+            document.getElementById('box-10a').style.display = 'none';
+            document.getElementById('box-10b').style.display = 'block';
+        }
+
+        function finish() {
+            if(isEditMode) return;
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('finish-screen').style.display = 'flex';
+        }
+
+        function initScrollLogic() {
+            const box = document.getElementById('box-8');
+            let sy = 0;
+            const hS = (y) => { sy = y; };
+            const hE = (y) => { if(!isEditMode && (sy - y > 40)) next(9); };
+
+            box.addEventListener('touchstart', e => hS(e.touches[0].clientY), {passive:true});
+            box.addEventListener('touchend', e => hE(e.changedTouches[0].clientY), {passive:true});
+            box.addEventListener('mousedown', e => {
+                hS(e.clientY);
+                const up = mu => { hE(mu.clientY); document.removeEventListener('mouseup', up); };
+                document.addEventListener('mouseup', up);
+            });
+        }
+
+        function getCoords(e) { return (e.touches && e.touches[0]) ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : {x:e.clientX, y:e.clientY}; }
+
+        function initDragAndResize() {
+            const boxes = document.querySelectorAll('.click-area, .scroll-area');
+            boxes.forEach(box => {
+                const resizer = box.querySelector('.resizer');
+                
+                const startResize = (e) => {
+                    if(!isEditMode) return;
+                    e.stopPropagation();
+                    const start = getCoords(e);
+                    const sw = box.offsetWidth, sh = box.offsetHeight;
+                    const cw = container.offsetWidth, ch = container.offsetHeight;
+                    
+                    const move = (ev) => {
+                        const curr = getCoords(ev);
+                        box.style.width = ((sw + (curr.x - start.x))/cw*100) + '%';
+                        box.style.height = ((sh + (curr.y - start.y))/ch*100) + '%';
+                    };
+                    const end = () => { unbind(move, end); };
+                    bind(move, end);
+                };
+
+                const startDrag = (e) => {
+                    if(!isEditMode || e.target.classList.contains('resizer')) return;
+                    if(e.type === 'touchstart') e.preventDefault();
+                    const start = getCoords(e);
+                    const rect = box.getBoundingClientRect();
+                    const crect = container.getBoundingClientRect();
+                    const sl = rect.left - crect.left, st = rect.top - crect.top;
+
+                    const move = (ev) => {
+                        if(ev.type==='touchmove') ev.preventDefault();
+                        const curr = getCoords(ev);
+                        box.style.left = ((sl + (curr.x - start.x))/container.offsetWidth*100) + '%';
+                        box.style.top = ((st + (curr.y - start.y))/container.offsetHeight*100) + '%';
+                    };
+                    const end = () => { unbind(move, end); };
+                    bind(move, end);
+                };
+
+                if(resizer) {
+                    resizer.addEventListener('mousedown', startResize);
+                    resizer.addEventListener('touchstart', startResize, {passive:false});
+                }
+                box.addEventListener('mousedown', startDrag);
+                box.addEventListener('touchstart', startDrag, {passive:false});
+            });
+        }
+
+        function bind(mv, end) {
+            document.addEventListener('mousemove', mv); document.addEventListener('mouseup', end);
+            document.addEventListener('touchmove', mv, {passive:false}); document.addEventListener('touchend', end);
+        }
+        function unbind(mv, end) {
+            document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', end);
+            document.removeEventListener('touchmove', mv); document.removeEventListener('touchend', end);
+        }
+
+        function savePositions() {
+            const pos = {};
+            document.querySelectorAll('.click-area, .scroll-area').forEach(b => {
+                if(b.id) pos[b.id] = {t:b.style.top, l:b.style.left, w:b.style.width, h:b.style.height};
+            });
+            localStorage.setItem('simulasi_pos_master_v3', JSON.stringify(pos));
+        }
+
+        function resetPositions() {
+            if(confirm("Reset posisi?")) {
+                localStorage.removeItem('simulasi_pos_master_v3');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
+
+
