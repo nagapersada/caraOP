@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Editor Simulasi Trading</title>
+    <style>
+        /* --- STYLE DASAR --- */
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none; 
+            user-select: none;
+        }
+
+        /* --- MENU KONTROL (BISA PINDAH ATAS/BAWAH) --- */
+        #controls {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            padding: 15px 0;
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0,0,0,0.9);
+            border-top: 1px solid #333;
+            border-bottom: 1px solid #333;
+            transition: all 0.3s ease;
+            
+            /* Posisi Awal: Bawah */
+            bottom: 0; 
+            top: auto;
+        }
+
+        /* Kelas untuk pindah ke Atas */
+        #controls.pos-top {
+            top: 0;
+            bottom: auto;
+        }
+
+        /* Sembunyikan kontrol saat Mode Main (Play) */
+        body.play-mode #controls {
+            display: none;
+        }
+
+        /* Tombol Pemicu Menu (Muncul saat Mode Main untuk balik ke Edit) */
+        #menu-trigger {
+            position: absolute;
+            top: 0; left: 0; width: 50px; height: 50px;
+            z-index: 9998;
+            display: none; /* Hanya muncul di play mode */
+            cursor: pointer;
+        }
+        body.play-mode #menu-trigger { display: block; }
+
+        button {
+            padding: 12px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            color: white;
+            white-space: nowrap;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        .btn-edit { background-color: #FFC107; color: black; }
+        .btn-lock { background-color: #28a745; }
+        .btn-reset { background-color: #dc3545; }
+        .btn-move { background-color: #007bff; font-size: 18px; width: 50px; }
+
+        /* --- WADAH HP --- */
+        #phone-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        /* Bingkai Kuning saat Edit supaya tau batas layar */
+        body:not(.play-mode) #phone-container {
+            border: 2px dashed #FFC107;
+            box-sizing: border-box;
+        }
+
+        /* --- LAYAR GAMBAR --- */
+        .screen {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: none;
+            background-size: 100% 100%;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        .screen.active { display: block; }
+
+        /* Pesan error jika gambar tidak ada */
+        .screen::after {
+            content: "⚠️ " attr(data-img) " ?\A Cek file.";
+            white-space: pre-wrap;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff6b6b;
+            font-size: 14px;
+            z-index: -1;
+        }
+
+        /* --- GAMBAR 8 (SCROLL) --- */
+        .screen-scroll-wrapper {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            z-index: 5;
+            background-color: #000;
+        }
+        .screen-scroll-wrapper img {
+            width: 100%; display: block; height: auto;
+        }
+
+        /* --- AREA INTERAKTIF (KOTAK MERAH/BIRU) --- */
+        .click-area, .scroll-area {
+            position: absolute;
+            box-sizing: border-box;
+            z-index: 10;
+            touch-action: none;
+        }
+
+        /* TAMPILAN MODE EDIT (JELAS TERLIHAT) */
+        body:not(.play-mode) .click-area {
+            cursor: move;
+            border: 2px dashed #FFC107; 
+            background-color: rgba(255, 193, 7, 0.3);
+        }
+        
+        body:not(.play-mode) .scroll-area {
+            cursor: move;
+            border: 2px dashed #00BCD4;
+            background-color: rgba(0, 188, 212, 0.3);
+        }
+        body:not(.play-mode) .scroll-area::after {
+            content: "AREA SWIPE UP";
+            font-size: 10px; color: white;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-weight: bold; text-shadow: 1px 1px 2px black; text-align: center;
+            background: rgba(0,0,0,0.5); padding: 2px; border-radius: 4px;
+        }
+
+        /* TAMPILAN MODE PLAY (BERSIH/INVISIBLE) */
+        body.play-mode .click-area, 
+        body.play-mode .scroll-area {
+            border: none;
+            background-color: transparent;
+            cursor: pointer;
+        }
+        body.play-mode .click-area:active {
+            background-color: rgba(255, 255, 255, 0.1); /* Feedback klik */
+        }
+
+        /* RESIZER (Pengubah Ukuran - Hanya di Mode Edit) */
+        .resizer {
+            width: 40px; height: 40px; 
+            background: #007bff;
+            border: 3px solid white;
+            border-radius: 50%;
+            position: absolute;
+            right: -15px; bottom: -15px;
+            cursor: se-resize;
+            display: none;
+            z-index: 20;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        body:not(.play-mode) .resizer { display: block; }
+
+        /* Layar Selesai */
+        #finish-screen {
+            background-color: #111;
+            color: white;
+            display: none; 
+            flex-direction: column;
+            justify-content: center; 
+            align-items: center;
+            height: 100%; width: 100%;
+        }
+    </style>
+</head>
+<body class="">
+
+    <div id="menu-trigger" onclick="exitPlayMode()"></div>
+
+    <div id="controls">
+        <button class="btn-move" onclick="toggleControlsPos()">↕</button>
+        <button id="btn-mode" class="btn-edit" onclick="toggleMode()">🔓 Susun (Edit)</button>
+        <button class="btn-fullscreen" onclick="toggleFullScreen()">⛶ Full</button>
+        <button class="btn-reset" onclick="resetPositions()">⚠️ Reset Awal</button>
+    </div>
+
+    <div id="phone-container">
+        
+        <div class="screen active" id="screen-1" style="background-image: url('1.jpg');" data-img="1.jpg">
+            <div id="box-1" class="click-area" style="top: 73%; left: 26%; width: 18%; height: 9%;" onclick="next(2)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-2" style="background-image: url('2.jpg');" data-img="2.jpg">
+            <div id="box-2" class="click-area" style="top: 17%; left: 0%; width: 100%; height: 10%;" onclick="next(3)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-3" style="background-image: url('3.jpg');" data-img="3.jpg">
+            <div id="box-3" class="click-area" style="top: 0%; left: 30%; width: 70%; height: 8%;" onclick="next(4)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-4" style="background-image: url('4.jpg');" data-img="4.jpg">
+            <div id="box-4" class="click-area" style="top: 50%; left: 5%; width: 90%; height: 25%;" onclick="next(5)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-5" style="background-image: url('5.jpg');" data-img="5.jpg">
+            <div id="box-5" class="click-area" style="top: 0%; left: 0%; width: 15%; height: 8%;" onclick="next(6)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-6" style="background-image: url('6.jpg');" data-img="6.jpg">
+            <div id="box-6" class="click-area" style="top: 60%; left: 26%; width: 18%; height: 9%;" onclick="next(7)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-7" style="background-image: url('7.jpg');" data-img="7.jpg">
+            <div id="box-7" class="click-area" style="bottom: 0%; left: 25%; width: 25%; height: 8%;" onclick="next(8)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-8" data-img="8.jpg">
+            <div class="screen-scroll-wrapper">
+                <img src="8.jpg" alt="Scroll Image" ondragstart="return false;">
+            </div>
+            <div id="box-8" class="scroll-area" style="top: 30%; left: 10%; width: 80%; height: 40%;">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-9" style="background-image: url('9.jpg');" data-img="9.jpg">
+            <div id="box-9" class="click-area" style="top: 35%; right: 5%; width: 40%; height: 6%;" onclick="next(10)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-10" style="background-image: url('10.jpg');" data-img="10.jpg">
+            <div id="box-10a" class="click-area" style="top: 45%; left: 5%; width: 15%; height: 5%;" onclick="step10Part2()">
+                <div class="resizer"></div>
+            </div>
+            <div id="box-10b" class="click-area" style="display:none; top: 55%; left: 5%; width: 43%; height: 7%;" onclick="next(11)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-11" style="background-image: url('11.jpg');" data-img="11.jpg">
+            <div id="box-11" class="click-area" style="top: 55%; right: 10%; width: 35%; height: 6%;" onclick="next(12)">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div class="screen" id="screen-12" style="background-image: url('12.jpg');" data-img="12.jpg">
+            <div id="box-12-finish" class="click-area" style="bottom: 10%; left: 25%; width: 50%; height: 8%;" onclick="finish()">
+                <div class="resizer"></div>
+            </div>
+        </div>
+
+        <div id="finish-screen">
+            <h1 style="color: #28a745;">TRANSAKSI SELESAI!</h1>
+            <button class="btn-edit" onclick="location.reload()" style="margin-top:20px;">Ulangi</button>
+        </div>
+        
+    </div>
+
+    <script>
+        let isPlayMode = false;
+        const container = document.getElementById('phone-container');
+        const controls = document.getElementById('controls');
+
+        window.onload = function() {
+            // Gunakan kunci penyimpanan BARU biar bersih dari error sebelumnya
+            loadPositions(); 
+            initDragAndResizeListeners();
+            initScrollLogic();
+        };
+
+        // --- NAVIGASI POSISI KONTROL ---
+        function toggleControlsPos() {
+            controls.classList.toggle('pos-top');
+        }
+
+        // --- MODE TOGGLE (EDIT vs MAIN) ---
+        function toggleMode() {
+            isPlayMode = !isPlayMode;
+            const btn = document.getElementById('btn-mode');
+            const body = document.body;
+            
+            if (isPlayMode) {
+                // MASUK MODE MAIN (LOCK)
+                body.classList.add('play-mode');
+                // Tombol berubah jadi teks 'Terkunci' tapi panel kontrol hilang
+                
+                // Simpan posisi sebelum main
+                savePositions();
+
+                // Reset Step 10
+                document.getElementById('box-10a').style.display = 'block';
+                document.getElementById('box-10b').style.display = 'none';
+                
+                // Pesan konfirmasi
+                alert("Posisi Terkunci & Tersimpan! Klik pojok kiri atas jika ingin kembali mengedit.");
+            } else {
+                // MASUK MODE EDIT (UNLOCK)
+                body.classList.remove('play-mode');
+                btn.innerHTML = "🔓 Susun (Edit)";
+                btn.className = "btn-edit";
+                
+                // Tampilkan semua box Step 10
+                document.getElementById('box-10a').style.display = 'block';
+                document.getElementById('box-10b').style.display = 'block';
+            }
+        }
+
+        function exitPlayMode() {
+            if(confirm("Kembali ke mode Edit?")) {
+                toggleMode();
+            }
+        }
+
+        // --- NAVIGASI LAYAR ---
+        function next(step) {
+            if (!isPlayMode) return; // Mode edit gabisa klik pindah
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            const target = document.getElementById('screen-' + step);
+            if(target) target.classList.add('active');
+        }
+
+        function step10Part2() {
+            if (!isPlayMode) return;
+            document.getElementById('box-10a').style.display = 'none';
+            document.getElementById('box-10b').style.display = 'block';
+        }
+
+        function finish() {
+            if (!isPlayMode) return;
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('finish-screen').style.display = 'flex';
+        }
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(e => console.log(e));
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        // --- LOGIKA SCROLL (STEP 8) ---
+        function initScrollLogic() {
+            const scrollBox = document.getElementById('box-8');
+            let startY = 0;
+
+            scrollBox.addEventListener('touchstart', (e) => {
+                if (!isPlayMode) return;
+                startY = e.touches[0].clientY;
+            }, {passive: true});
+
+            scrollBox.addEventListener('touchend', (e) => {
+                if (!isPlayMode) return;
+                const endY = e.changedTouches[0].clientY;
+                if (startY - endY > 40) { // Usap ke atas > 40px
+                    next(9);
+                }
+            }, {passive: true});
+            
+            scrollBox.addEventListener('mousedown', (e) => {
+                if (!isPlayMode) return;
+                startY = e.clientY;
+                const onUp = (mu) => {
+                    if (startY - mu.clientY > 40) next(9);
+                    document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mouseup', onUp);
+            });
+        }
+
+        // --- DRAG & RESIZE (CORE LOGIC) ---
+        function getCoords(e) {
+            return (e.touches && e.touches[0]) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+        }
+
+        function initDragAndResizeListeners() {
+            const boxes = document.querySelectorAll('.click-area, .scroll-area');
+            boxes.forEach(box => {
+                const resizer = box.querySelector('.resizer');
+
+                // RESIZE
+                const startResize = (e) => {
+                    if (isPlayMode) return;
+                    e.stopPropagation();
+                    const startCoords = getCoords(e);
+                    const startW = box.offsetWidth;
+                    const startH = box.offsetHeight;
+                    const cW = container.offsetWidth;
+                    const cH = container.offsetHeight;
+
+                    const onMove = (mv) => {
+                        const curr = getCoords(mv);
+                        box.style.width = ((startW + (curr.x - startCoords.x)) / cW * 100) + '%';
+                        box.style.height = ((startH + (curr.y - startCoords.y)) / cH * 100) + '%';
+                    };
+                    const onEnd = () => removeLs(onMove, onEnd);
+                    addLs(onMove, onEnd);
+                };
+
+                // DRAG
+                const startDrag = (e) => {
+                    if (isPlayMode || e.target.classList.contains('resizer')) return;
+                    if(e.type === 'touchstart') e.preventDefault();
+                    const startCoords = getCoords(e);
+                    const rect = box.getBoundingClientRect();
+                    const cRect = container.getBoundingClientRect();
+                    const startL = rect.left - cRect.left;
+                    const startT = rect.top - cRect.top;
+
+                    const onMove = (mv) => {
+                        if(mv.type === 'touchmove') mv.preventDefault();
+                        const curr = getCoords(mv);
+                        box.style.left = ((startL + (curr.x - startCoords.x)) / container.offsetWidth * 100) + '%';
+                        box.style.top = ((startT + (curr.y - startCoords.y)) / container.offsetHeight * 100) + '%';
+                    };
+                    const onEnd = () => removeLs(onMove, onEnd);
+                    addLs(onMove, onEnd);
+                };
+
+                if(resizer) {
+                    resizer.addEventListener('mousedown', startResize);
+                    resizer.addEventListener('touchstart', startResize, {passive: false});
+                }
+                box.addEventListener('mousedown', startDrag);
+                box.addEventListener('touchstart', startDrag, {passive: false});
+            });
+        }
+
+        function addLs(mv, end) {
+            document.addEventListener('mousemove', mv);
+            document.addEventListener('mouseup', end);
+            document.addEventListener('touchmove', mv, {passive: false});
+            document.addEventListener('touchend', end);
+        }
+        function removeLs(mv, end) {
+            document.removeEventListener('mousemove', mv);
+            document.removeEventListener('mouseup', end);
+            document.removeEventListener('touchmove', mv);
+            document.removeEventListener('touchend', end);
+        }
+
+        // --- PENYIMPANAN DATA (LOCAL STORAGE) ---
+        // Kunci penyimpanan: simulasi_pos_fixed_final
+        function savePositions() {
+            const pos = {};
+            document.querySelectorAll('.click-area, .scroll-area').forEach(b => {
+                if(b.id) pos[b.id] = {t: b.style.top, l: b.style.left, w: b.style.width, h: b.style.height};
+            });
+            localStorage.setItem('simulasi_pos_fixed_final', JSON.stringify(pos));
+        }
+
+        function loadPositions() {
+            // Cek apakah ada data di kunci baru
+            let saved = localStorage.getItem('simulasi_pos_fixed_final');
+            
+            // Kalau kosong, coba ambil dari versi sebelumnya biar gak nyusun ulang dr nol
+            if (!saved) saved = localStorage.getItem('simulasi_pos_final_v2');
+            if (!saved) saved = localStorage.getItem('simulasi_pos_ultimate');
+
+            if(saved) {
+                try {
+                    const pos = JSON.parse(saved);
+                    for(let id in pos) {
+                        const b = document.getElementById(id);
+                        if(b) { 
+                            b.style.top=pos[id].t; 
+                            b.style.left=pos[id].l || pos[id].left; 
+                            b.style.width=pos[id].w; 
+                            b.style.height=pos[id].h; 
+                        }
+                    }
+                } catch(e){}
+            }
+        }
+
+        function resetPositions() {
+            if(confirm("Yakin reset semua posisi kotak ke awal?")) {
+                localStorage.removeItem('simulasi_pos_fixed_final');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
