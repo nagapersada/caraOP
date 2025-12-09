@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Trading DVTEAM</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        /* Bingkai HP */
+        #phone-frame {
+            width: 360px;
+            height: 780px;
+            background-color: #000;
+            border-radius: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            overflow: hidden;
+            position: relative;
+            border: 8px solid #333;
+        }
+
+        /* Gambar Layar */
+        #screen-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* Area Klik (Hotspot) */
+        .hotspot {
+            position: absolute;
+            background-color: rgba(255, 255, 0, 0.3); /* Kuning transparan agar terlihat */
+            border: 2px dashed red;
+            cursor: pointer;
+            z-index: 10;
+            animation: pulse 1.5s infinite;
+            border-radius: 50%;
+        }
+
+        /* Petunjuk Teks */
+        #instruction {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            text-align: center;
+            width: 80%;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        /* Efek Denyut */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.05); opacity: 0.3; }
+            100% { transform: scale(1); opacity: 0.6; }
+        }
+
+        /* Modal Selesai */
+        #success-modal {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 30;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+        }
+
+        .btn-restart {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="phone-frame">
+        <img id="screen-image" src="1.jpg" alt="Layar Simulasi">
+        
+        <div id="click-area" class="hotspot"></div>
+        
+        <div id="instruction">Klik icon Telegram</div>
+
+        <div id="success-modal">
+            <h1>Transaksi Berhasil!</h1>
+            <p>Anda telah mengikuti sinyal dengan benar.</p>
+            <button class="btn-restart" onclick="restartSimulation()">Ulangi Simulasi</button>
+        </div>
+    </div>
+
+    <script>
+        // Konfigurasi Langkah-Langkah
+        // Sesuaikan posisi top, left, width, height (dalam %) sesuai gambar Anda
+        const steps = [
+            {
+                id: 1,
+                image: "1.jpg",
+                text: "Langkah 1: Buka aplikasi Telegram",
+                // Posisi icon Telegram (perkiraan)
+                hotspot: { top: "35%", left: "25%", width: "15%", height: "8%" },
+                nextImage: "2.jpg"
+            },
+            {
+                id: 2,
+                image: "2.jpg",
+                text: "Langkah 2: Pilih Grup DVTeam -NP",
+                // Posisi Chat paling atas
+                hotspot: { top: "18%", left: "0%", width: "100%", height: "10%" },
+                nextImage: "3.jpg"
+            },
+            {
+                id: 3,
+                image: "3.jpg",
+                text: "Langkah 3: Klik Pesan Tersemat (Pin)",
+                // Posisi Pin Message di atas
+                hotspot: { top: "12%", left: "0%", width: "100%", height: "8%" },
+                nextImage: "4.jpg"
+            },
+            {
+                id: 4,
+                image: "4.jpg",
+                text: "Langkah 4: Baca Sinyal, lalu kembali ke Home",
+                // Posisi tombol Home navigasi bawah / tombol back
+                hotspot: { top: "90%", left: "40%", width: "20%", height: "10%" },
+                nextImage: "1.jpg" // Kembali ke layar utama HP
+            },
+            {
+                id: 5,
+                image: "1.jpg", 
+                text: "Langkah 5: Buka Aplikasi OPALP",
+                // Posisi icon OPALP
+                hotspot: { top: "35%", left: "45%", width: "15%", height: "8%" },
+                nextImage: "7.jpg"
+            },
+            {
+                id: 6,
+                image: "7.jpg",
+                text: "Langkah 6: Klik menu Kontrak (Futures)",
+                // Posisi menu bawah icon disket
+                hotspot: { top: "90%", left: "60%", width: "15%", height: "8%" },
+                nextImage: "8.jpg"
+            },
+            {
+                id: 7,
+                image: "8.jpg",
+                text: "Langkah 7: Gulir ke atas untuk melihat panel transaksi",
+                // Area besar di tengah untuk simulasi scroll
+                hotspot: { top: "30%", left: "10%", width: "80%", height: "40%" },
+                nextImage: "9.jpg"
+            },
+            {
+                id: 8,
+                image: "9.jpg",
+                text: "Langkah 8: Klik No. Periode & Atur 1%",
+                // Area input periode/persentase
+                hotspot: { top: "35%", left: "65%", width: "30%", height: "15%" },
+                nextImage: "10.jpg"
+            },
+            {
+                id: 9,
+                image: "10.jpg",
+                text: "Langkah 9: Klik Tombol Beli (Hijau)",
+                // Tombol Buy Hijau
+                hotspot: { top: "65%", left: "5%", width: "40%", height: "8%" },
+                action: "finish"
+            }
+        ];
+
+        let currentStep = 0;
+        const imgElement = document.getElementById('screen-image');
+        const hotspotElement = document.getElementById('click-area');
+        const instructionElement = document.getElementById('instruction');
+        const successModal = document.getElementById('success-modal');
+
+        function loadStep(index) {
+            if (index >= steps.length) return;
+            
+            const step = steps[index];
+            
+            // Update Gambar
+            imgElement.src = step.image;
+            
+            // Update Teks
+            instructionElement.innerText = step.text;
+            
+            // Update Posisi Area Klik
+            hotspotElement.style.top = step.hotspot.top;
+            hotspotElement.style.left = step.hotspot.left;
+            hotspotElement.style.width = step.hotspot.width;
+            hotspotElement.style.height = step.hotspot.height;
+            
+            // Reset aksi klik lama
+            hotspotElement.onclick = function() {
+                if (step.action === 'finish') {
+                    showSuccess();
+                } else {
+                    currentStep++;
+                    loadStep(currentStep);
+                }
+            };
+        }
+
+        function showSuccess() {
+            successModal.style.display = 'flex';
+        }
+
+        function restartSimulation() {
+            currentStep = 0;
+            successModal.style.display = 'none';
+            loadStep(0);
+        }
+
+        // Mulai aplikasi
+        loadStep(0);
+
+    </script>
+</body>
+</html>
