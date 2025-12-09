@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulasi Trading Pro</title>
+    <style>
+        /* --- RESET & LAYOUT UTAMA --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212; /* Latar gelap profesional */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding-top: 20px;
+            padding-bottom: 120px; /* Ruang untuk panel kontrol bawah */
+            overflow-y: auto;
+            color: white;
+        }
+
+        /* --- BINGKAI HP (FRAME) --- */
+        #phone-frame {
+            position: relative;
+            width: 100%;
+            max-width: 360px; /* Lebar standar simulasi */
+            /* RASIO ASPEK 9:20 (Sesuai Screenshot HP Modern) */
+            aspect-ratio: 9/20; 
+            background-color: #000;
+            border: 2px solid #333;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden; /* Default: tidak bisa scroll */
+        }
+
+        /* Mode Scroll Aktif (Untuk Gambar Panjang) */
+        #phone-frame.scroll-active {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch; /* Smooth scroll di iOS */
+            scrollbar-width: none; /* Sembunyikan scrollbar di Firefox */
+        }
+        #phone-frame.scroll-active::-webkit-scrollbar {
+            display: none; /* Sembunyikan scrollbar di Chrome/Safari */
+        }
+
+        /* --- WRAPPER GAMBAR (Anchor Point Kordinat) --- */
+        /* Ini adalah kunci agar posisi 'terkunci' pada gambar */
+        #content-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: 100%;
+            /* Tinggi akan otomatis menyesuaikan gambar di dalamnya */
+        }
+
+        /* --- GAMBAR SIMULASI --- */
+        #screen-img {
+            display: block;
+            width: 100%;
+            height: auto; /* Tinggi mengikuti aspek rasio gambar asli */
+            pointer-events: none; /* Agar tidak bisa didrag browser */
+            user-select: none;
+        }
+
+        /* Kelas untuk memaksa gambar fit ke layar (Langkah Normal) */
+        .fit-mode {
+            height: 100%;
+            object-fit: fill; 
+        }
+
+        /* --- AREA KLIK (HOTSPOT) --- */
+        #hotspot {
+            position: absolute;
+            z-index: 50;
+            /* Default posisi */
+            top: 40%; left: 40%; width: 20%; height: 10%;
+            box-sizing: border-box;
+            touch-action: none; /* Mencegah browser scroll saat drag hotspot */
+        }
+
+        /* Tampilan saat MODE EDIT */
+        .mode-edit #hotspot {
+            background-color: rgba(33, 150, 243, 0.4); /* Biru Transparan */
+            border: 2px dashed #fff;
+            cursor: move;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        
+        /* Pegangan Resize (Pojok Kanan Bawah) */
+        .resize-handle {
+            position: absolute;
+            right: -10px; bottom: -10px;
+            width: 24px; height: 24px;
+            background-color: #fff;
+            border: 3px solid #2196F3;
+            border-radius: 50%;
+            z-index: 60;
+            display: none; /* Sembunyi saat main */
+        }
+        .mode-edit .resize-handle { display: block; } /* Muncul saat edit */
+
+        /* Tampilan saat MODE MAIN (LOCK) */
+        .mode-lock #hotspot {
+            background-color: rgba(255, 0, 0, 0.25); /* Merah Transparan */
+            border: none;
+            cursor: pointer;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { background-color: rgba(255, 0, 0, 0.1); box-shadow: 0 0 0 rgba(255,0,0,0); }
+            50% { background-color: rgba(255, 0, 0, 0.5); box-shadow: 0 0 15px rgba(255,0,0,0.5); }
+            100% { background-color: rgba(255, 0, 0, 0.1); box-shadow: 0 0 0 rgba(255,0,0,0); }
+        }
+
+        /* --- UI KONTROL --- */
+        .info-bar {
+            margin-bottom: 10px;
+            background: rgba(255,255,255,0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: #1e1e1e;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            border-top: 1px solid #333;
+            z-index: 1000;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+        }
+
+        button {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.1s;
+            width: 100%;
+            max-width: 160px;
+        }
+        button:active { transform: scale(0.96); }
+
+        #btn-edit { background: #ff9800; color: #000; }
+        #btn-lock { background: #4caf50; color: #fff; display: none; }
+        #btn-reset { 
+            position: absolute; top: 15px; right: 15px; 
+            width: auto; padding: 6px 12px; font-size: 0.8rem;
+            background: #f44336; color: white;
+            z-index: 100;
+            border-radius: 4px;
+        }
+
+    </style>
+</head>
+<body class="mode-lock">
+
+    <div class="info-bar" id="status-text">Memuat Simulasi...</div>
+    <button id="btn-reset" onclick="resetSim()">↺ Reset Awal</button>
+
+    <div id="phone-frame">
+        <div id="content-wrapper">
+            <img id="screen-img" src="1.jpg" alt="Screen">
+            
+            <div id="hotspot">
+                <div class="resize-handle"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-edit" onclick="setMode('edit')">✏️ EDIT POSISI</button>
+        <button id="btn-lock" onclick="setMode('lock')">🔒 KUNCI & MAIN</button>
+    </div>
+
+    <script>
+        // --- KONFIGURASI ALUR SIMULASI ---
+        /*
+          mode: 'normal' -> Gambar pas satu layar (Aspect Ratio 9:20)
+          mode: 'scroll' -> Gambar panjang (bisa digulir)
+        */
+        let steps = [
+            { img: "1.jpg", mode: 'normal', desc: "1/12: Klik Telegram", x: 40, y: 40, w: 20, h: 10 },
+            { img: "2.jpg", mode: 'normal', desc: "2/12: Klik Group DVTEAM", x: 40, y: 40, w: 20, h: 10 },
+            { img: "3.jpg", mode: 'normal', desc: "3/12: Klik Pesan Tersemat", x: 40, y: 40, w: 20, h: 10 },
+            { img: "4.jpg", mode: 'normal', desc: "4/12: Klik Kartu Sinyal", x: 40, y: 40, w: 20, h: 10 },
+            { img: "5.jpg", mode: 'normal', desc: "5/12: Klik Tombol Home", x: 40, y: 40, w: 20, h: 10 },
+            { img: "6.jpg", mode: 'normal', desc: "6/12: Klik App OPALP", x: 40, y: 40, w: 20, h: 10 },
+            { img: "7.jpg", mode: 'normal', desc: "7/12: Klik Menu Kontrak", x: 40, y: 40, w: 20, h: 10 },
+            
+            // Gambar 8 Panjang (Mode Scroll)
+            { img: "8.jpg", mode: 'scroll', desc: "8/12: Scroll & Klik Area Bawah", x: 10, y: 80, w: 80, h: 5 },
+            
+            { img: "9.jpg", mode: 'normal', desc: "9/12: Pilih Periode/1%", x: 40, y: 40, w: 20, h: 10 },
+            { img: "10.jpg", mode: 'normal',desc: "10/12: Klik Tombol Hijau", x: 40, y: 40, w: 20, h: 10 },
+            { img: "11.jpg", mode: 'normal',desc: "11/12: Klik Konfirmasi", x: 40, y: 40, w: 20, h: 10 },
+            
+            // Gambar Terakhir (Klik Layar Bebas)
+            { img: "12.jpg", mode: 'normal',desc: "12/12: Transaksi Selesai (Klik Layar)", x: 0, y: 0, w: 100, h: 100 }
+        ];
+
+        let currentStep = 0;
+        let isEditing = false;
+
+        // Cache Element
+        const body = document.body;
+        const phoneFrame = document.getElementById('phone-frame');
+        const contentWrapper = document.getElementById('content-wrapper');
+        const img = document.getElementById('screen-img');
+        const hotspot = document.getElementById('hotspot');
+        const statusText = document.getElementById('status-text');
+        const btnEdit = document.getElementById('btn-edit');
+        const btnLock = document.getElementById('btn-lock');
+
+        // --- FUNGSI UTAMA ---
+
+        function loadStep(index) {
+            // Cek Selesai
+            if (index >= steps.length) {
+                if(confirm("Simulasi Selesai! Ulangi lagi?")) {
+                    currentStep = 0;
+                    loadStep(0);
+                } else {
+                    currentStep = steps.length - 1; // Stay di akhir
+                }
+                return;
+            }
+
+            const data = steps[index];
+            img.src = data.img;
+            statusText.innerText = data.desc;
+
+            // Reset Scroll
+            phoneFrame.scrollTop = 0;
+
+            // Atur Mode Tampilan
+            if (data.mode === 'scroll') {
+                phoneFrame.classList.add('scroll-active');
+                img.classList.remove('fit-mode');
+                // Wrapper tinggi otomatis mengikuti gambar
+                contentWrapper.style.height = 'auto';
+            } else {
+                phoneFrame.classList.remove('scroll-active');
+                img.classList.add('fit-mode');
+                // Wrapper tinggi 100% frame
+                contentWrapper.style.height = '100%';
+            }
+
+            // Terapkan Kordinat (%)
+            // Karena parent adalah contentWrapper, % dihitung relatif terhadap gambar
+            hotspot.style.left = data.x + '%';
+            hotspot.style.top = data.y + '%';
+            hotspot.style.width = data.w + '%';
+            hotspot.style.height = data.h + '%';
+        }
+
+        function setMode(mode) {
+            if (mode === 'edit') {
+                isEditing = true;
+                body.classList.replace('mode-lock', 'mode-edit');
+                btnEdit.style.display = 'none';
+                btnLock.style.display = 'block';
+                statusText.innerText = "MODE EDIT: Geser kotak biru ke posisi tombol";
+            } else {
+                isEditing = false;
+                body.classList.replace('mode-edit', 'mode-lock');
+                btnEdit.style.display = 'block';
+                btnLock.style.display = 'none';
+                statusText.innerText = steps[currentStep].desc;
+            }
+        }
+
+        function resetSim() {
+            if(confirm("Kembali ke langkah awal?")) {
+                currentStep = 0;
+                loadStep(0);
+                setMode('lock');
+            }
+        }
+
+        // --- INTERAKSI (SIMULASI) ---
+        hotspot.addEventListener('click', (e) => {
+            if (isEditing) return;
+            if (e.target.classList.contains('resize-handle')) return;
+
+            // Efek Feedback
+            hotspot.style.backgroundColor = "rgba(0, 255, 0, 0.4)";
+            setTimeout(() => {
+                hotspot.style.backgroundColor = "";
+                currentStep++;
+                loadStep(currentStep);
+            }, 150);
+        });
+
+        // --- INTERAKSI DRAG & RESIZE (EDIT) ---
+        // Mendukung Mouse dan Touchscreen
+        let startX, startY, startLeft, startTop, startW, startH;
+        let activeAction = null; // 'drag' or 'resize'
+
+        const getPointer = (e) => e.touches ? e.touches[0] : e;
+
+        const onPointerDown = (e, action) => {
+            if (!isEditing) return;
+            // Cegah scroll saat edit hotspot
+            if (e.type === 'touchstart') e.preventDefault(); 
+            e.stopPropagation();
+
+            activeAction = action;
+            const p = getPointer(e);
+            
+            startX = p.clientX;
+            startY = p.clientY;
+            startLeft = hotspot.offsetLeft;
+            startTop = hotspot.offsetTop;
+            startW = hotspot.offsetWidth;
+            startH = hotspot.offsetHeight;
+
+            document.addEventListener('mousemove', onPointerMove);
+            document.addEventListener('touchmove', onPointerMove, {passive: false});
+            document.addEventListener('mouseup', onPointerUp);
+            document.addEventListener('touchend', onPointerUp);
+        };
+
+        const onPointerMove = (e) => {
+            if (!isEditing || !activeAction) return;
+            if (e.type === 'touchmove') e.preventDefault(); // Lock scroll page
+
+            const p = getPointer(e);
+            const dx = p.clientX - startX;
+            const dy = p.clientY - startY;
+
+            if (activeAction === 'drag') {
+                hotspot.style.left = (startLeft + dx) + 'px';
+                hotspot.style.top = (startTop + dy) + 'px';
+            } else if (activeAction === 'resize') {
+                hotspot.style.width = Math.max(20, startW + dx) + 'px';
+                hotspot.style.height = Math.max(20, startH + dy) + 'px';
+            }
+        };
+
+        const onPointerUp = () => {
+            if (!isEditing) return;
+            
+            // --- LOGIKA PENGUNCIAN KOORDINAT (PX -> %) ---
+            // Menghitung posisi relatif terhadap Wrapper (Gambar), bukan Layar
+            const parentW = contentWrapper.offsetWidth;
+            const parentH = contentWrapper.offsetHeight;
+
+            // Konversi ke Persen
+            const percLeft = (hotspot.offsetLeft / parentW) * 100;
+            const percTop = (hotspot.offsetTop / parentH) * 100;
+            const percW = (hotspot.offsetWidth / parentW) * 100;
+            const percH = (hotspot.offsetHeight / parentH) * 100;
+
+            // Terapkan Persen ke CSS (Agar responsif)
+            hotspot.style.left = percLeft + '%';
+            hotspot.style.top = percTop + '%';
+            hotspot.style.width = percW + '%';
+            hotspot.style.height = percH + '%';
+
+            // Simpan ke Memory Array
+            steps[currentStep].x = percLeft;
+            steps[currentStep].y = percTop;
+            steps[currentStep].w = percW;
+            steps[currentStep].h = percH;
+
+            // Bersihkan Listener
+            activeAction = null;
+            document.removeEventListener('mousemove', onPointerMove);
+            document.removeEventListener('touchmove', onPointerMove);
+            document.removeEventListener('mouseup', onPointerUp);
+            document.removeEventListener('touchend', onPointerUp);
+        };
+
+        // Attach Event Listeners
+        hotspot.addEventListener('mousedown', (e) => { if(!e.target.classList.contains('resize-handle')) onPointerDown(e, 'drag'); });
+        hotspot.addEventListener('touchstart', (e) => { if(!e.target.classList.contains('resize-handle')) onPointerDown(e, 'drag'); }, {passive: false});
+
+        document.querySelector('.resize-handle').addEventListener('mousedown', (e) => onPointerDown(e, 'resize'));
+        document.querySelector('.resize-handle').addEventListener('touchstart', (e) => onPointerDown(e, 'resize'), {passive: false});
+
+        // Jalankan Awal
+        loadStep(0);
+
+    </script>
+</body>
+</html>
