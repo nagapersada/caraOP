@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulasi Trading (Player Mode)</title>
+    <style>
+        /* --- RESET & STYLE DASAR --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px 0;
+            overflow-y: auto; 
+        }
+
+        /* --- BINGKAI HP --- */
+        #phone-frame {
+            position: relative;
+            width: 100%;
+            max-width: 380px; 
+            background-color: #000;
+            border: 4px solid #333;
+            border-radius: 25px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.6);
+            overflow: hidden; 
+            transition: height 0.3s;
+        }
+
+        /* --- WRAPPER (KUNCI KOORDINAT) --- */
+        #content-wrapper {
+            position: relative;
+            width: 100%;
+            height: auto; 
+            margin: 0 auto;
+        }
+
+        /* --- GAMBAR --- */
+        #screen-img {
+            display: block;
+            width: 100%;
+            height: auto; 
+            user-select: none;
+            pointer-events: none;
+        }
+
+        /* --- AREA KLIK (HOTSPOT) --- */
+        #hotspot {
+            position: absolute;
+            z-index: 50;
+            cursor: pointer;
+            /* Default: Muncul */
+            background: rgba(255, 0, 0, 0.25);
+            animation: pulse 1.5s infinite;
+            border: 1px solid rgba(255,0,0,0.3);
+        }
+
+        /* Kelas untuk menyembunyikan visual (tapi tetap bisa diklik) */
+        #hotspot.hidden-area {
+            background: transparent !important;
+            animation: none !important;
+            border: none !important;
+        }
+
+        @keyframes pulse {
+            0% { background: rgba(255, 0, 0, 0.1); }
+            50% { background: rgba(255, 0, 0, 0.5); box-shadow: 0 0 15px rgba(255,0,0,0.5); }
+            100% { background: rgba(255, 0, 0, 0.1); }
+        }
+
+        /* --- UI STATUS & TOMBOL TOGGLE --- */
+        .header-ui {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 380px;
+            margin-bottom: 10px;
+            padding: 0 10px;
+        }
+
+        .status-bar {
+            font-size: 14px; color: #eee;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 15px; border-radius: 20px;
+        }
+
+        /* Tombol Toggle Baru */
+        #btn-toggle-hint {
+            background: #c0392b; 
+            color: white; padding: 8px 15px; 
+            font-size: 12px; border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: background 0.2s;
+        }
+        #btn-toggle-hint:active { transform: scale(0.95); }
+
+        .scroll-mode {
+            height: 70vh;
+            overflow-y: auto !important;
+        }
+        
+        /* Hilangkan elemen resize handle */
+        .resize-handle { display: none; }
+
+    </style>
+</head>
+<body>
+
+    <div class="header-ui">
+        <div class="status-bar" id="status-text">Langkah 1</div>
+        <button id="btn-toggle-hint" onclick="toggleHotspot()">👁️ Sembunyikan Area</button>
+    </div>
+
+    <div id="phone-frame">
+        <div id="content-wrapper">
+            <img id="screen-img" src="1.jpg" alt="Layar Simulasi">
+            <div id="hotspot"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // AREA INI WAJIB ANDA GANTI DENGAN KODE PERMANEN ANDA
+        // ============================================================
+        const steps = [
+          // TEMPEL (PASTE) KODE YANG ANDA COPY TADI DI SINI
+          // TIMPA DATA DI BAWAH INI SAMPAI KURUNG SIKU TUTUP '];'
+          
+          { "img": "1.jpg", "mode": "normal", "desc": "1/12: Klik Telegram", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "2.jpg", "mode": "normal", "desc": "2/12: Klik Group DVTEAM", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "3.jpg", "mode": "normal", "desc": "3/12: Klik Pesan Tersemat", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "4.jpg", "mode": "normal", "desc": "4/12: Klik Kartu Sinyal", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "5.jpg", "mode": "normal", "desc": "5/12: Klik Tombol Home", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "6.jpg", "mode": "normal", "desc": "6/12: Klik App OPALP", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "7.jpg", "mode": "normal", "desc": "7/12: Klik Menu Kontrak", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "8.jpg", "mode": "scroll", "desc": "8/12: Scroll & Klik Bawah", "x": 10, "y": 80, "w": 80, "h": 5 },
+          { "img": "9.jpg", "mode": "normal", "desc": "9/12: Pilih Periode/1%", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "10.jpg", "mode": "normal", "desc": "10/12: Klik Tombol Hijau", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "11.jpg", "mode": "normal", "desc": "11/12: Klik Konfirmasi", "x": 40, "y": 40, "w": 20, "h": 10 },
+          { "img": "12.jpg", "mode": "normal", "desc": "12/12: Selesai", "x": 0, "y": 0, "w": 100, "h": 100 }
+
+          // ============================================================
+        ];
+
+        let currentStep = 0;
+        let isHotspotVisible = true; 
+
+        // Elements
+        const frame = document.getElementById('phone-frame');
+        const img = document.getElementById('screen-img');
+        const hotspot = document.getElementById('hotspot');
+        const statusText = document.getElementById('status-text');
+        const toggleBtn = document.getElementById('btn-toggle-hint');
+
+        // --- FUNGSI LOAD LANGKAH ---
+        function loadStep(index) {
+            if(index >= steps.length) {
+                if(confirm("Simulasi Selesai! Ulangi dari awal?")) { 
+                    currentStep=0; 
+                    loadStep(0); 
+                } else { 
+                    currentStep = steps.length-1; 
+                }
+                return;
+            }
+
+            const s = steps[index];
+            img.src = s.img;
+            statusText.innerText = s.desc;
+            
+            frame.scrollTop = 0;
+
+            if(s.mode === 'scroll') {
+                frame.classList.add('scroll-mode');
+            } else {
+                frame.classList.remove('scroll-mode');
+            }
+
+            // Terapkan posisi
+            hotspot.style.left = s.x + '%';
+            hotspot.style.top = s.y + '%';
+            hotspot.style.width = s.w + '%';
+            hotspot.style.height = s.h + '%';
+
+            updateHotspotVisual();
+        }
+
+        // --- FUNGSI TOGGLE (ON/OFF AREA MERAH) ---
+        function toggleHotspot() {
+            isHotspotVisible = !isHotspotVisible;
+            updateHotspotVisual();
+        }
+
+        function updateHotspotVisual() {
+            if (isHotspotVisible) {
+                hotspot.classList.remove('hidden-area');
+                toggleBtn.innerText = "👁️ Sembunyikan Area";
+                toggleBtn.style.background = "#c0392b"; // Merah
+            } else {
+                hotspot.classList.add('hidden-area');
+                toggleBtn.innerText = "👁️ Tampilkan Area";
+                toggleBtn.style.background = "#27ae60"; // Hijau
+            }
+        }
+
+        // --- INTERAKSI KLIK ---
+        hotspot.addEventListener('click', () => {
+            // Efek feedback klik (walaupun invisible tetap ada efek dikit biar tau kena)
+            if(!isHotspotVisible) {
+                hotspot.style.backgroundColor = "rgba(0,255,0,0.3)";
+                setTimeout(() => { hotspot.style.backgroundColor = "transparent"; }, 100);
+            } else {
+                hotspot.style.backgroundColor = "rgba(0,255,0,0.5)";
+                setTimeout(() => { hotspot.style.backgroundColor = "rgba(255, 0, 0, 0.25)"; }, 150);
+            }
+
+            // Pindah langkah
+            setTimeout(() => {
+                currentStep++;
+                loadStep(currentStep);
+            }, 150);
+        });
+
+        // Jalankan Awal
+        loadStep(0);
+
+    </script>
+</body>
+</html>
