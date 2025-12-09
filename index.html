@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulasi Trading Pro</title>
+    <style>
+        /* --- RESET & GLOBAL --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden; 
+        }
+
+        /* --- LAYAR PEMBUKA --- */
+        #intro-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #111;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            text-align: center;
+            color: white;
+        }
+
+        #start-btn {
+            padding: 15px 50px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(39, 174, 96, 0.5);
+        }
+
+        /* --- WADAH UTAMA SIMULASI --- */
+        #sim-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: none;
+            background-color: #000;
+        }
+
+        /* --- VIEWPORT HP (SCROLLABLE AREA) --- */
+        #phone-viewport {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 500px; /* Batas lebar di Tablet */
+            margin: 0 auto;
+            background: #000;
+            
+            /* Scroll Aktif Selamanya */
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch;
+            
+            /* Padding bawah ditaruh di sini agar tidak merusak koordinat */
+            padding-bottom: 80px; 
+        }
+        
+        /* Hide Scrollbar */
+        #phone-viewport::-webkit-scrollbar { display: none; }
+
+        /* --- WRAPPER GAMBAR (ANCHOR POINT) --- */
+        #content-wrapper {
+            position: relative;
+            width: 100%;
+            height: auto; 
+            /* PENTING: Jangan ada padding di sini agar koordinat akurat */
+            margin: 0;
+            padding: 0;
+            line-height: 0; /* Menghilangkan gap bawah pada img */
+        }
+
+        /* --- GAMBAR (NATURAL) --- */
+        #screen-img {
+            display: block;
+            width: 100%;
+            height: auto; /* Tinggi natural (TIDAK GEPENG) */
+            object-fit: contain;
+            pointer-events: none;
+        }
+
+        /* --- HOTSPOT --- */
+        #hotspot {
+            position: absolute;
+            z-index: 50;
+            cursor: pointer;
+            background: rgba(255, 0, 0, 0.25);
+            animation: hotspot-pulse 1.5s infinite;
+            border: 1px solid rgba(255,0,0,0.3);
+            display: block;
+        }
+        
+        #hotspot.hidden-area {
+            background: transparent !important;
+            animation: none !important;
+            border: none !important;
+        }
+
+        @keyframes hotspot-pulse {
+            0% { background: rgba(255, 0, 0, 0.1); }
+            50% { background: rgba(255, 0, 0, 0.5); box-shadow: 0 0 15px rgba(255,0,0,0.5); }
+            100% { background: rgba(255, 0, 0, 0.1); }
+        }
+
+        /* --- TOMBOL TOGGLE (Floating) --- */
+        #ui-layer {
+            position: absolute;
+            top: 20px; right: 20px;
+            z-index: 100;
+            pointer-events: none; /* Agar klik tembus ke bawah */
+        }
+
+        #btn-toggle {
+            pointer-events: auto;
+            background: rgba(192, 57, 43, 0.9);
+            color: white; padding: 8px 16px;
+            border: none; border-radius: 20px;
+            font-size: 11px; font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="intro-screen">
+        <h3 style="margin-bottom: 20px; font-weight: normal; color: #ccc;">SIMULASI TRADING</h3>
+        <button id="start-btn" onclick="startApp()">MULAI APLIKASI</button>
+    </div>
+
+    <div id="sim-container">
+        <div id="phone-viewport">
+            
+            <div id="ui-layer">
+                <button id="btn-toggle" onclick="toggleHotspot()">👁️ Sembunyikan Area</button>
+            </div>
+
+            <div id="content-wrapper">
+                <img id="screen-img" src="1.jpg" alt="Screen">
+                <div id="hotspot"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // DATA KOORDINAT SEMPURNA (YANG ANDA BUAT SEBELUMNYA)
+        // ============================================================
+        const steps = [
+          { "img": "1.jpg", "x": 21.02, "y": 68.51, "w": 19.88, "h": 9.94 },
+          { "img": "2.jpg", "x": 1.42, "y": 43.57, "w": 97.72, "h": 9.31 },
+          { "img": "3.jpg", "x": 84.09, "y": 10.95, "w": 16.47, "h": 6.80 },
+          { "img": "4.jpg", "x": 15.05, "y": 13.47, "w": 71.30, "h": 16.87 },
+          { "img": "5.jpg", "x": 42.04, "y": 93.19, "w": 17.04, "h": 6.92 },
+          { "img": "6.jpg", "x": 21.30, "y": 56.29, "w": 19.88, "h": 9.94 },
+          { "img": "7.jpg", "x": 51.98, "y": 85.26, "w": 19.88, "h": 9.94 },
+          { "img": "8.jpg", "x": 66.76, "y": 50.95, "w": 28.40, "h": 15.94 },
+          { "img": "9.jpg", "x": 5.39, "y": 40.80, "w": 15.90, "h": 5.66 },
+          { "img": "10.jpg", "x": 3.97, "y": 52.51, "w": 45.45, "h": 6.17 },
+          { "img": "11.jpg", "x": 51.13, "y": 56.17, "w": 37.21, "h": 6.17 },
+          { "img": "12.jpg", "x": 0, "y": 0, "w": 100, "h": 100 }
+        ];
+
+        let currentStep = 0;
+        let isHotspotVisible = true; 
+
+        // Elements
+        const introScreen = document.getElementById('intro-screen');
+        const simContainer = document.getElementById('sim-container');
+        const viewport = document.getElementById('phone-viewport');
+        const img = document.getElementById('screen-img');
+        const hotspot = document.getElementById('hotspot');
+        const btnToggle = document.getElementById('btn-toggle');
+
+        function startApp() {
+            // Full Screen
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) { elem.requestFullscreen(); }
+            else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
+
+            introScreen.style.display = 'none';
+            simContainer.style.display = 'flex';
+            loadStep(0);
+        }
+
+        function loadStep(index) {
+            if(index >= steps.length) {
+                if(confirm("Simulasi Selesai! Ulangi?")) { 
+                    currentStep=0; 
+                    loadStep(0); 
+                } else { 
+                    currentStep = steps.length-1; 
+                }
+                return;
+            }
+
+            const s = steps[index];
+            img.src = s.img;
+            
+            // RESET SCROLL ke paling atas
+            viewport.scrollTop = 0;
+
+            // Set Posisi Hotspot
+            hotspot.style.left = s.x + '%';
+            hotspot.style.top = s.y + '%';
+            hotspot.style.width = s.w + '%';
+            hotspot.style.height = s.h + '%';
+
+            updateHotspotVisual();
+        }
+
+        function toggleHotspot() {
+            isHotspotVisible = !isHotspotVisible;
+            updateHotspotVisual();
+        }
+
+        function updateHotspotVisual() {
+            if (isHotspotVisible) {
+                hotspot.classList.remove('hidden-area');
+                btnToggle.innerText = "👁️ Sembunyikan Area";
+                btnToggle.style.background = "rgba(192, 57, 43, 0.9)";
+            } else {
+                hotspot.classList.add('hidden-area');
+                btnToggle.innerText = "👁️ Tampilkan Area";
+                btnToggle.style.background = "rgba(39, 174, 96, 0.9)";
+            }
+        }
+
+        hotspot.addEventListener('click', () => {
+            const originalColor = isHotspotVisible ? "rgba(255,0,0,0.25)" : "transparent";
+            hotspot.style.backgroundColor = "rgba(0,255,0,0.4)";
+            
+            setTimeout(() => {
+                hotspot.style.backgroundColor = originalColor;
+                currentStep++;
+                loadStep(currentStep);
+            }, 100);
+        });
+
+    </script>
+</body>
+</html>
