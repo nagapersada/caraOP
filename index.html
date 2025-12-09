@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulasi Trading V3 (Final)</title>
+    <style>
+        /* --- RESET & STYLE DASAR --- */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px 0 140px 0;
+            overflow-y: auto; 
+        }
+
+        /* --- BINGKAI HP --- */
+        #phone-frame {
+            position: relative;
+            width: 100%;
+            max-width: 380px; 
+            background-color: #000;
+            border: 4px solid #333;
+            border-radius: 25px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.6);
+            overflow: hidden; 
+            transition: height 0.3s;
+        }
+
+        /* --- WRAPPER (KUNCI KOORDINAT) --- */
+        #content-wrapper {
+            position: relative;
+            width: 100%;
+            height: auto; 
+            margin: 0 auto;
+        }
+
+        /* --- GAMBAR --- */
+        #screen-img {
+            display: block;
+            width: 100%;
+            height: auto; 
+            user-select: none;
+            pointer-events: none;
+        }
+
+        /* --- AREA KLIK (HOTSPOT) --- */
+        #hotspot {
+            position: absolute;
+            z-index: 50;
+            top: 0; left: 0; width: 0; height: 0; /* Default hidden */
+        }
+
+        /* Tampilan saat EDIT */
+        .mode-edit #hotspot {
+            background: rgba(0, 174, 255, 0.4);
+            border: 2px dashed #fff;
+            cursor: move;
+        }
+        
+        /* Pegangan Resize */
+        .resize-handle {
+            position: absolute;
+            right: -15px; bottom: -15px;
+            width: 30px; height: 30px;
+            background: #fff;
+            border: 3px solid #00aeef;
+            border-radius: 50%;
+            display: none;
+            z-index: 60;
+        }
+        .mode-edit .resize-handle { display: block; }
+
+        /* Tampilan saat MAIN */
+        .mode-lock #hotspot {
+            background: rgba(255, 0, 0, 0.25);
+            cursor: pointer;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { background: rgba(255, 0, 0, 0.1); }
+            50% { background: rgba(255, 0, 0, 0.5); box-shadow: 0 0 15px rgba(255,0,0,0.5); }
+            100% { background: rgba(255, 0, 0, 0.1); }
+        }
+
+        /* --- PANEL KONTROL --- */
+        .controls {
+            position: fixed;
+            bottom: 0; left: 0; width: 100%;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            padding: 15px;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-group { display: flex; gap: 10px; width: 100%; max-width: 400px; }
+        
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        #btn-edit { background: #f39c12; color: #fff; }
+        #btn-lock { background: #27ae60; color: #fff; display: none; }
+        #btn-save { background: #3498db; color: #fff; width: 100%; max-width: 400px; }
+        #btn-reset-pos {
+            position: absolute; top: 15px; right: 15px;
+            background: #c0392b; color: white; padding: 5px 10px; 
+            font-size: 10px; width: auto; z-index: 1000;
+            border-radius: 4px;
+        }
+
+        .status-bar {
+            margin-bottom: 5px;
+            font-size: 12px; color: #aaa;
+            background: rgba(255,255,255,0.1);
+            padding: 4px 12px; border-radius: 10px;
+        }
+
+        .scroll-mode {
+            height: 70vh; /* Tinggi scroll area */
+            overflow-y: auto !important;
+        }
+        
+        /* Modal Output */
+        #code-modal {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 2000;
+            flex-direction: column;
+            justify-content: center;
+            padding: 20px;
+        }
+        textarea {
+            width: 100%; height: 200px;
+            background: #222; color: #0f0;
+            border: 1px solid #444;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 10px;
+        }
+
+    </style>
+</head>
+<body class="mode-lock">
+
+    <div class="status-bar" id="status-text">Memuat...</div>
+    <button id="btn-reset-pos" onclick="hardReset()">⚠ Reset Data</button>
+
+    <div id="phone-frame">
+        <div id="content-wrapper">
+            <img id="screen-img" src="1.jpg" onerror="alert('Gambar tidak ditemukan! Pastikan nama file 1.jpg s/d 12.jpg ada di folder.')">
+            
+            <div id="hotspot">
+                <div class="resize-handle"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="btn-group">
+            <button id="btn-edit" onclick="setMode('edit')">✏️ EDIT POSISI</button>
+            <button id="btn-lock" onclick="setMode('lock')">🔒 KUNCI & MAIN</button>
+        </div>
+        <button id="btn-save" onclick="generateCode()">💾 AMBIL KODE PERMANEN</button>
+    </div>
+
+    <div id="code-modal">
+        <h3 style="color:#fff">Salin Kode Permanen:</h3>
+        <textarea id="output-area" readonly></textarea>
+        <button onclick="document.getElementById('code-modal').style.display='none'" style="margin-top:10px; background:#555;">Tutup</button>
+    </div>
+
+    <script>
+        // --- DATA URUTAN LANGKAH (1 s/d 12) ---
+        let defaultSteps = [
+            { img: "1.jpg", mode: "normal", desc: "1/12: Klik Telegram", x: 40, y: 40, w: 20, h: 10 },
+            { img: "2.jpg", mode: "normal", desc: "2/12: Klik Group DVTEAM", x: 40, y: 40, w: 20, h: 10 },
+            { img: "3.jpg", mode: "normal", desc: "3/12: Klik Pesan Tersemat", x: 40, y: 40, w: 20, h: 10 },
+            { img: "4.jpg", mode: "normal", desc: "4/12: Klik Kartu Sinyal", x: 40, y: 40, w: 20, h: 10 },
+            { img: "5.jpg", mode: "normal", desc: "5/12: Klik Tombol Home", x: 40, y: 40, w: 20, h: 10 },
+            { img: "6.jpg", mode: "normal", desc: "6/12: Klik App OPALP", x: 40, y: 40, w: 20, h: 10 },
+            { img: "7.jpg", mode: "normal", desc: "7/12: Klik Menu Kontrak", x: 40, y: 40, w: 20, h: 10 },
+            
+            // Gambar 8 = Mode SCROLL
+            { img: "8.jpg", mode: "scroll", desc: "8/12: Scroll ke Bawah & Klik", x: 10, y: 90, w: 80, h: 5 },
+            
+            { img: "9.jpg", mode: "normal", desc: "9/12: Pilih Periode/1%", x: 40, y: 40, w: 20, h: 10 },
+            { img: "10.jpg", mode: "normal", desc: "10/12: Klik Tombol Hijau", x: 40, y: 40, w: 20, h: 10 },
+            
+            // --- DATA BARU (11 & 12) ---
+            { img: "11.jpg", mode: "normal", desc: "11/12: Klik Tombol Konfirmasi", x: 40, y: 40, w: 20, h: 10 },
+            { img: "12.jpg", mode: "normal", desc: "12/12: Selesai", x: 0, y: 0, w: 100, h: 100 }
+        ];
+
+        // --- SISTEM PERBAIKAN OTOMATIS (AUTO FIX) ---
+        let steps = defaultSteps;
+        try {
+            let savedData = localStorage.getItem('sim_dvteam_v3');
+            if (savedData) {
+                let parsed = JSON.parse(savedData);
+                // Jika jumlah data di memori tidak sama dengan 12 (karena data lama cuma 10)
+                // Maka PAKSA RESET agar tidak error/blank
+                if (parsed.length !== defaultSteps.length) {
+                    console.log("Data lama tidak cocok. Melakukan Reset...");
+                    localStorage.removeItem('sim_dvteam_v3');
+                } else {
+                    steps = parsed;
+                }
+            }
+        } catch (e) {
+            console.error("Error loading data", e);
+            localStorage.removeItem('sim_dvteam_v3'); // Reset jika corrupt
+        }
+
+        let currentStep = 0;
+        let isEditing = false;
+
+        // Elements
+        const frame = document.getElementById('phone-frame');
+        const wrapper = document.getElementById('content-wrapper');
+        const img = document.getElementById('screen-img');
+        const hotspot = document.getElementById('hotspot');
+        const statusText = document.getElementById('status-text');
+        const btnEdit = document.getElementById('btn-edit');
+        const btnLock = document.getElementById('btn-lock');
+
+        // --- FUNGSI UTAMA ---
+
+        function loadStep(index) {
+            if(index >= steps.length) {
+                if(confirm("Simulasi Selesai! Ulangi?")) { currentStep=0; loadStep(0); }
+                else { currentStep = steps.length-1; }
+                return;
+            }
+
+            const s = steps[index];
+            img.src = s.img;
+            statusText.innerText = s.desc;
+            
+            frame.scrollTop = 0;
+
+            if(s.mode === 'scroll') {
+                frame.classList.add('scroll-mode');
+            } else {
+                frame.classList.remove('scroll-mode');
+            }
+
+            hotspot.style.left = s.x + '%';
+            hotspot.style.top = s.y + '%';
+            hotspot.style.width = s.w + '%';
+            hotspot.style.height = s.h + '%';
+        }
+
+        function setMode(mode) {
+            isEditing = (mode === 'edit');
+            document.body.className = isEditing ? 'mode-edit' : 'mode-lock';
+            btnEdit.style.display = isEditing ? 'none' : 'block';
+            btnLock.style.display = isEditing ? 'block' : 'none';
+            statusText.innerText = isEditing ? "GESER KOTAK BIRU KE POSISI TOMBOL" : steps[currentStep].desc;
+        }
+
+        function saveToMemory() {
+            localStorage.setItem('sim_dvteam_v3', JSON.stringify(steps));
+        }
+
+        function hardReset() {
+            if(confirm("Hapus semua posisi editan & mulai baru?")) {
+                localStorage.removeItem('sim_dvteam_v3');
+                location.reload();
+            }
+        }
+
+        function generateCode() {
+            const json = JSON.stringify(steps, null, 2);
+            const code = `let defaultSteps = ${json};`;
+            document.getElementById('output-area').value = code;
+            document.getElementById('code-modal').style.display = 'flex';
+        }
+
+        // --- DRAG & RESIZE ---
+        let startX, startY, startLeft, startTop, startW, startH, activeType = null;
+        const getXY = (e) => e.touches ? e.touches[0] : e;
+
+        const onDown = (e, type) => {
+            if(!isEditing) return;
+            if(e.type === 'touchstart') e.preventDefault();
+            e.stopPropagation();
+
+            activeType = type;
+            const p = getXY(e);
+            startX = p.clientX; startY = p.clientY;
+            startLeft = hotspot.offsetLeft; startTop = hotspot.offsetTop;
+            startW = hotspot.offsetWidth; startH = hotspot.offsetHeight;
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('touchmove', onMove, {passive:false});
+            document.addEventListener('mouseup', onUp);
+            document.addEventListener('touchend', onUp);
+        };
+
+        const onMove = (e) => {
+            if(!activeType) return;
+            if(e.type === 'touchmove') e.preventDefault(); 
+            const p = getXY(e);
+            const dx = p.clientX - startX;
+            const dy = p.clientY - startY;
+
+            if(activeType === 'drag') {
+                hotspot.style.left = (startLeft + dx) + 'px';
+                hotspot.style.top = (startTop + dy) + 'px';
+            } else {
+                hotspot.style.width = (startW + dx) + 'px';
+                hotspot.style.height = (startH + dy) + 'px';
+            }
+        };
+
+        const onUp = () => {
+            if(!activeType) return;
+            
+            const parentW = wrapper.offsetWidth;
+            const parentH = wrapper.offsetHeight;
+
+            const perX = (hotspot.offsetLeft / parentW) * 100;
+            const perY = (hotspot.offsetTop / parentH) * 100;
+            const perW = (hotspot.offsetWidth / parentW) * 100;
+            const perH = (hotspot.offsetHeight / parentH) * 100;
+
+            hotspot.style.left = perX + '%'; hotspot.style.top = perY + '%';
+            hotspot.style.width = perW + '%'; hotspot.style.height = perH + '%';
+
+            steps[currentStep].x = perX;
+            steps[currentStep].y = perY;
+            steps[currentStep].w = perW;
+            steps[currentStep].h = perH;
+            
+            saveToMemory();
+
+            activeType = null;
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.removeEventListener('touchend', onUp);
+        };
+
+        hotspot.addEventListener('mousedown', (e) => { if(!e.target.classList.contains('resize-handle')) onDown(e, 'drag'); });
+        hotspot.addEventListener('touchstart', (e) => { if(!e.target.classList.contains('resize-handle')) onDown(e, 'drag'); }, {passive:false});
+        document.querySelector('.resize-handle').addEventListener('mousedown', (e) => onDown(e, 'resize'));
+        document.querySelector('.resize-handle').addEventListener('touchstart', (e) => onDown(e, 'resize'), {passive:false});
+
+        hotspot.addEventListener('click', (e) => {
+            if(isEditing || activeType) return;
+            hotspot.style.backgroundColor = "rgba(0,255,0,0.5)";
+            setTimeout(() => {
+                hotspot.style.backgroundColor = "";
+                currentStep++;
+                loadStep(currentStep);
+            }, 150);
+        });
+
+        // Jalankan
+        loadStep(0);
+
+    </script>
+</body>
+</html>
